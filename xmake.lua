@@ -34,11 +34,11 @@ target("libutil_timer")
 -- IPC模块
 target("ipc")
     set_kind("static")
-    add_files("src/ipc_base.cpp", "src/ipc_writer.cpp", "src/ipc_reader.cpp", "src/ipc_implement.cpp")
-    add_headerfiles("include/ipc_base.hpp", "include/ipc_packet.hpp", "include/ipc_writer.hpp", "include/ipc_reader.hpp", "include/ipc_implement.hpp")
+    add_files("src/ipc_base.cpp", "src/ipc_writer.cpp", "src/ipc_reader.cpp", "src/ipc_implement.cpp", "src/ipc_shared_memory.cpp")
+    add_headerfiles("include/ipc_base.hpp", "include/ipc_packet.hpp", "include/ipc_writer.hpp", "include/ipc_reader.hpp", "include/ipc_implement.hpp", "include/ipc_shared_memory.hpp")
     add_includedirs("include", {public = true})
     add_deps("libutil_log")
-    add_links("pthread")
+    add_links("pthread", "rt")  -- 添加rt库用于共享内存和信号量操作
 
 -- 整合所有库到一个目标
 target("libutil")
@@ -52,4 +52,4 @@ target("test_util")
     add_deps("libutil")
     add_files("test/test_main.cpp")
     add_includedirs("include")
-    add_links("pthread")
+    add_links("pthread", "rt")  -- 添加rt库用于共享内存和信号量操作

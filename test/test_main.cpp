@@ -90,6 +90,42 @@ void test_memory_pool() {
         std::cout << "创建了内存池智能指针: " << *ptr << std::endl;
     }
     
+    // 测试新增的数组分配功能
+    std::cout << "\n测试内存池数组分配:" << std::endl;
+    {
+        auto arr = util::memory::make_pool_array<int>(10);
+        for (int i = 0; i < 10; ++i) {
+            arr[i] = i * i;
+        }
+        std::cout << "创建了内存池数组，前5个元素: ";
+        for (int i = 0; i < 5; ++i) {
+            std::cout << arr[i] << " ";
+        }
+        std::cout << std::endl;
+    }
+    
+    // 测试内存使用率统计
+    std::cout << "\n测试内存使用率统计:" << std::endl;
+    {
+        // 分配一批内存以提高使用率
+        std::vector<void*> test_ptrs;
+        for (int i = 0; i < 100; ++i) {
+            test_ptrs.push_back(pool.Allocate(64));
+        }
+        
+        std::cout << "当前内存使用率: " << (pool.GetMemoryUsage() * 100.0) << "%" << std::endl;
+        std::cout << "当前大内存块数量: " << pool.GetLargeAllocations() << std::endl;
+        
+        // 释放内存
+        for (auto ptr : test_ptrs) {
+            pool.Deallocate(ptr, 64);
+        }
+    }
+    
+    // 测试内存池Trim功能
+    std::cout << "\n测试内存池Trim功能:" << std::endl;
+    pool.Trim();
+    
     // 再次打印统计信息
     std::cout << "\n释放后内存池统计信息:" << std::endl;
     pool.PrintStats();
@@ -115,23 +151,15 @@ void test_timer() {
 }
 
 // 测试IPC通信
-
 void test_ipc_communication() {
-    std::cout << "\n===== 测试IPC通信模块 =====\n" << std::endl;
-    
-    // 创建服务端和客户端IPC实现
-    util::ipc::IPCImplement server_ipc;
-    util::ipc::IPCImplement client_ipc;
+    std::cout << "\n===== 测试IPC通信模块 (共享内存实现) =====\n" << std::endl;
     
     const std::string ipc_name = "test_ipc";
     
-    // 配置服务端和客户端
-    std::cout << "配置IPC实现..." << std::endl;
-    server_ipc.setIpcName(ipc_name);
-    server_ipc.setIsServer(true);
-    
-    client_ipc.setIpcName(ipc_name);
-    client_ipc.setIsServer(false);
+    // 创建服务端和客户端IPC实现
+    std::cout << "创建服务端和客户端..." << std::endl;
+    util::ipc::IPCImplement server_ipc(ipc_name, true);  // 服务端
+    util::ipc::IPCImplement client_ipc(ipc_name, false); // 客户端
     
     // 启动IPC通信
     std::cout << "启动服务端..." << std::endl;
@@ -144,105 +172,216 @@ void test_ipc_communication() {
     std::cout << "等待IPC通道建立连接..." << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     
-    // 准备测试消息
-    const std::string test_msg1 = "这是测试消息1";
-    const std::string test_msg2 = "这是测试消息2";
-    const std::string test_msg3 = "这是测试消息3";
+    // 测试双向通信
+    std::cout << "\n===== 测试双向通信 =====\n" << std::endl;
     
-    // 从客户端发送消息到服务端
-    std::cout << "\n开始发送测试消息..." << std::endl;
+    // 客户端发送请求
+    std::cout << "客户端发送请求..." << std::endl;
+    client_ipc.sendMessage("客户端请求: 获取当前时间");
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
-    std::cout << "发送消息1: " << test_msg1 << std::endl;
-    client_ipc.sendMessage(test_msg1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    server_ipc.sendMessage("服务端响应: 当前时间是 " + 
+                              std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
-    // 主动处理服务端接收的消息
-    // server_ipc.recvMessage();
-    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     
-    std::cout << "发送消息2: " << test_msg2 << std::endl;
-    client_ipc.sendMessage(test_msg2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // 客户端发送另一个请求
+    std::cout << "客户端发送另一个请求..." << std::endl;
+    client_ipc.sendMessage("客户端请求: 获取系统信息");
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
-    // 主动处理服务端接收的消息
-    // server_ipc.recvMessage();
-    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    server_ipc.sendMessage("服务端响应: 系统信息 - Linux x86_64");
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
     
-    std::cout << "发送消息3: " << test_msg3 << std::endl;
-    client_ipc.sendMessage(test_msg3);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // 测试并发双向通信
+    std::cout << "\n===== 测试并发双向通信 =====\n" << std::endl;
     
-    // 主动处理服务端接收的消息
-    // server_ipc.recvMessage();
-    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // 创建两个线程，一个用于客户端发送，一个用于服务端发送
+    std::thread client_send_thread([&client_ipc]() {
+        for (int i = 0; i < 10; i++) {
+            std::string msg = "客户端并发消息 #" + std::to_string(i);
+            client_ipc.sendMessage(msg);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    });
     
-    // 从服务端发送响应消息到客户端
-    std::cout << "\n服务端发送响应消息..." << std::endl;
-    server_ipc.sendMessage("服务端响应: 已收到所有消息");
+    std::thread server_send_thread([&server_ipc]() {
+        for (int i = 0; i < 10; i++) {
+            std::string msg = "服务端并发消息 #" + std::to_string(i);
+            server_ipc.sendMessage(msg);
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        }
+    });
+
     
-    // 主动处理客户端接收的消息
-    // std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    // client_ipc.recvMessage();
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // 等待线程完成
+    client_send_thread.join();
+    server_send_thread.join();
+    
+    // 等待一段时间，确保所有消息都被处理
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    // 测试性能
+    std::cout << "\n===== 测试IPC性能 =====\n" << std::endl;
+    
+    const int message_count = 1000;
+    std::cout << "发送 " << message_count << " 条消息进行性能测试..." << std::endl;
+    
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // 客户端发送大量消息
+    for (int i = 0; i < message_count; i++) {
+        client_ipc.sendMessage("性能测试消息 #" + std::to_string(i));
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     
     // 停止IPC通信
-    std::cout << "\n停止IPC通信..." << std::endl;
-    client_ipc.stop();
+    std::cout << "停止IPC通信..." << std::endl;
     server_ipc.stop();
+    client_ipc.stop();
     
-    std::cout << "IPC通信测试完成" << std::endl;
+    std::cout << "IPC通信测试完成\n" << std::endl;
 }
 
 // 性能测试：比较标准分配器和内存池
 void benchmark_memory_pool() {
     std::cout << "\n===== 内存池性能测试 =====\n" << std::endl;
     
-    const int iterations = 100000;
-    const size_t alloc_size = 64;
+    // 减少迭代次数以避免长时间运行
+    const int iterations = 10000;
+    const std::vector<size_t> alloc_sizes = {16, 64, 256, 1024, 4096};
     
-    // 标准分配器
-    auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        void* ptr = ::operator new(alloc_size);
-        ::operator delete(ptr);
+    std::cout << "测试不同大小的内存分配性能..." << std::endl;
+    
+    for (size_t alloc_size : alloc_sizes) {
+        std::cout << "\n测试大小: " << alloc_size << " 字节" << std::endl;
+        
+        // 使用标准分配器
+        auto start_std = std::chrono::high_resolution_clock::now();
+        std::vector<void*> std_ptrs;
+        std_ptrs.reserve(iterations);
+        
+        for (int i = 0; i < iterations; ++i) {
+            std_ptrs.push_back(malloc(alloc_size));
+        }
+        
+        for (auto ptr : std_ptrs) {
+            free(ptr);
+        }
+        std_ptrs.clear();
+        
+        auto end_std = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> std_time = end_std - start_std;
+        
+        // 使用内存池
+        auto& pool = util::memory::MemoryPool::GetInstance();
+        auto start_pool = std::chrono::high_resolution_clock::now();
+        std::vector<void*> pool_ptrs;
+        pool_ptrs.reserve(iterations);
+        
+        for (int i = 0; i < iterations; ++i) {
+            pool_ptrs.push_back(pool.Allocate(alloc_size));
+        }
+        
+        for (auto ptr : pool_ptrs) {
+            pool.Deallocate(ptr, alloc_size);
+        }
+        
+        auto end_pool = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> pool_time = end_pool - start_pool;
+        
+        // 输出结果
+        std::cout << "标准分配器: " << std::fixed << std::setprecision(2) << std_time.count() << " ms" << std::endl;
+        std::cout << "内存池: " << std::fixed << std::setprecision(2) << pool_time.count() << " ms" << std::endl;
+        std::cout << "性能提升: " << std::fixed << std::setprecision(2) << (std_time.count() / pool_time.count()) << "x" << std::endl;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto std_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     
-    // 内存池
+    // 测试多线程场景下的性能
+    std::cout << "\n测试多线程场景下的内存池性能..." << std::endl;
+    const int thread_count = 4;
+    const int per_thread_iterations = iterations / thread_count;
+    
+    // 标准分配器多线程测试
+    auto start_std_mt = std::chrono::high_resolution_clock::now();
+    
+    std::vector<std::thread> std_threads;
+    for (int t = 0; t < thread_count; ++t) {
+        std_threads.emplace_back([per_thread_iterations]() {
+            std::vector<void*> ptrs;
+            ptrs.reserve(per_thread_iterations);
+            
+            for (int i = 0; i < per_thread_iterations; ++i) {
+                ptrs.push_back(malloc(64));
+            }
+            
+            for (auto ptr : ptrs) {
+                free(ptr);
+            }
+        });
+    }
+    
+    for (auto& t : std_threads) {
+        t.join();
+    }
+    
+    auto end_std_mt = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> std_mt_time = end_std_mt - start_std_mt;
+    
+    // 内存池多线程测试
     auto& pool = util::memory::MemoryPool::GetInstance();
-    start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        void* ptr = pool.Allocate(alloc_size);
-        pool.Deallocate(ptr, alloc_size);
+    auto start_pool_mt = std::chrono::high_resolution_clock::now();
+    
+    std::vector<std::thread> pool_threads;
+    for (int t = 0; t < thread_count; ++t) {
+        pool_threads.emplace_back([per_thread_iterations, &pool]() {
+            std::vector<void*> ptrs;
+            ptrs.reserve(per_thread_iterations);
+            
+            for (int i = 0; i < per_thread_iterations; ++i) {
+                ptrs.push_back(pool.Allocate(64));
+            }
+            
+            for (auto ptr : ptrs) {
+                pool.Deallocate(ptr, 64);
+            }
+        });
     }
-    end = std::chrono::high_resolution_clock::now();
-    auto pool_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     
-    std::cout << "标准分配器: " << std_duration << " 微秒" << std::endl;
-    std::cout << "内存池: " << pool_duration << " 微秒" << std::endl;
-    
-    if (pool_duration < std_duration) {
-        double speedup = static_cast<double>(std_duration) / pool_duration;
-        std::cout << "内存池快 " << std::fixed << std::setprecision(2) << speedup << " 倍" << std::endl;
-    } else {
-        double slowdown = static_cast<double>(pool_duration) / std_duration;
-        std::cout << "内存池慢 " << std::fixed << std::setprecision(2) << slowdown << " 倍" << std::endl;
+    for (auto& t : pool_threads) {
+        t.join();
     }
     
-    std::cout << "性能测试完成\n" << std::endl;
+    auto end_pool_mt = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> pool_mt_time = end_pool_mt - start_pool_mt;
+    
+    // 输出多线程测试结果
+    std::cout << "多线程标准分配器: " << std::fixed << std::setprecision(2) << std_mt_time.count() << " ms" << std::endl;
+    std::cout << "多线程内存池: " << std::fixed << std::setprecision(2) << pool_mt_time.count() << " ms" << std::endl;
+    std::cout << "多线程性能提升: " << std::fixed << std::setprecision(2) << (std_mt_time.count() / pool_mt_time.count()) << "x" << std::endl;
 }
 
 int main() {
-    std::cout << "开始测试 libutil 库..." << std::endl;
-    
+    // 测试日志模块
     test_logger();
+    
+    // 测试线程池
     test_thread_pool();
+    
+    // 测试内存池
     test_memory_pool();
+    
+    // 测试定时器
     test_timer();
+    
+    // 测试IPC通信
     test_ipc_communication();
+    
+    // 性能测试
     benchmark_memory_pool();
     
-    std::cout << "所有测试完成!" << std::endl;
     return 0;
 }

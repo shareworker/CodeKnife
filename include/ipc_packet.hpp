@@ -37,6 +37,25 @@ struct PacketHeader {
 // Complete packet structure
 class IPCPacket {
 public:
+    // Default constructor for creating an empty packet
+    IPCPacket()
+        : header_{}
+        , payload_(nullptr)
+        , checksum_(0)
+        , total_size_(sizeof(PacketHeader) + sizeof(uint32_t))
+    {
+        header_.magic_id = IPC_PACKET_MAGIC;
+        header_.version = 1;
+        header_.msg_type = static_cast<uint8_t>(MessageType::REQUEST);
+        header_.reserved = 0;
+        header_.payload_len = 0;
+        header_.seq_num = 0;
+        header_.timestamp = GetCurrentTimestampMs();
+        
+        // Calculate checksum
+        CalculateChecksum();
+    }
+
     // Constructor for creating a new packet
     IPCPacket(MessageType type, uint32_t seq_num, const void* payload = nullptr, uint32_t payload_len = 0)
         : header_{}
@@ -105,6 +124,37 @@ public:
         // Copy checksum
         std::memcpy(&checksum_, static_cast<const uint8_t*>(data) + sizeof(PacketHeader) + header_.payload_len, sizeof(uint32_t));
     }
+    
+    // Copy constructor
+    IPCPacket(const IPCPacket& other)
+        : header_(other.header_)
+        , payload_(nullptr)
+        , checksum_(other.checksum_)
+        , total_size_(other.total_size_)
+    {
+        if (other.payload_ && other.header_.payload_len > 0) {
+            payload_ = new uint8_t[other.header_.payload_len];
+            std::memcpy(payload_, other.payload_, other.header_.payload_len);
+        }
+    }
+    
+    // Assignment operator
+    IPCPacket& operator=(const IPCPacket& other) {
+        if (this != &other) {
+            delete[] payload_;
+            payload_ = nullptr;
+            
+            header_ = other.header_;
+            checksum_ = other.checksum_;
+            total_size_ = other.total_size_;
+            
+            if (other.payload_ && other.header_.payload_len > 0) {
+                payload_ = new uint8_t[other.header_.payload_len];
+                std::memcpy(payload_, other.payload_, other.header_.payload_len);
+            }
+        }
+        return *this;
+    }
 
     // Destructor
     ~IPCPacket() {
@@ -129,6 +179,18 @@ public:
         std::memcpy(static_cast<uint8_t*>(buffer) + sizeof(PacketHeader) + header_.payload_len, &checksum_, sizeof(uint32_t));
 
         return true;
+    }
+    
+    // Serialize packet to string
+    std::string Serialize() const {
+        std::string result;
+        result.resize(total_size_);
+        
+        if (Serialize(&result[0], total_size_)) {
+            return result;
+        }
+        
+        return "";
     }
 
     // Getters
