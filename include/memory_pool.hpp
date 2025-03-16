@@ -7,16 +7,16 @@
 #include <cassert>
 #include <iostream>
 
-// 配置选项
-// 定义此宏以在分配时将内存块清零
+// Configuration options
+// Define this macro to zero out memory blocks on allocation
 // #define MEMORY_POOL_ZERO_ON_ALLOCATE
-// 定义此宏以在释放时验证指针
+// Define this macro to validate pointers on deallocation
 // #define MEMORY_POOL_VALIDATE_POINTERS
 
 namespace util {
 namespace memory {
 
-// 固定大小内存块的内存池
+// Memory pool for fixed-size memory blocks
 class FixedSizeMemoryPool {
 public:
     explicit FixedSizeMemoryPool(size_t block_size, size_t initial_blocks = 8);
@@ -29,7 +29,7 @@ public:
     size_t num_blocks() const { return blocks_.size(); }
     size_t num_free_blocks() const { return free_blocks_.size(); }
     
-    // 添加内存使用率统计
+    // Add memory usage statistics
     double usage_ratio() const { 
         return blocks_.empty() ? 0.0 : 
             static_cast<double>(blocks_.size() - free_blocks_.size()) / blocks_.size(); 
@@ -39,12 +39,12 @@ private:
     void expand(size_t num_blocks);
 
     const size_t block_size_;
-    std::vector<char*> blocks_;        // 所有分配的内存块
-    std::vector<char*> free_blocks_;   // 可用的内存块
+    std::vector<char*> blocks_;        // All allocated memory blocks
+    std::vector<char*> free_blocks_;   // Available memory blocks
     mutable std::mutex mutex_;
 };
 
-// 通用内存池，支持不同大小的内存分配
+// General memory pool supporting different sizes of memory allocation
 class MemoryPool {
 public:
     static MemoryPool& GetInstance();
@@ -52,17 +52,17 @@ public:
     void* Allocate(size_t size);
     void Deallocate(void* ptr, size_t size);
     
-    // 添加统计和调试功能
+    // Add statistics and debugging features
     size_t GetTotalAllocations() const { return total_allocations_; }
     size_t GetCurrentAllocations() const { return current_allocations_; }
     size_t GetLargeAllocations() const;
     double GetMemoryUsage() const;
     void PrintStats() const;
     
-    // 添加内存池清理方法
+    // Add memory pool cleanup method
     void Trim();
 
-    // 禁止拷贝和赋值
+    // Disable copy and assignment
     MemoryPool(const MemoryPool&) = delete;
     MemoryPool& operator=(const MemoryPool&) = delete;
 
@@ -70,7 +70,7 @@ private:
     MemoryPool();
     ~MemoryPool();
 
-    // 常见的内存块大小
+    // Common memory block sizes
     static constexpr size_t kSmallBlockSizes[] = {
         8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
     };
@@ -80,13 +80,13 @@ private:
     mutable std::mutex large_alloc_mutex_;
     std::unordered_map<void*, size_t> large_allocations_;
 
-    // 统计信息
+    // Statistics
     mutable std::mutex stats_mutex_;
     size_t total_allocations_ = 0;
     size_t current_allocations_ = 0;
 };
 
-// 智能指针的自定义删除器
+// Custom deleter for smart pointers
 template <typename T>
 struct MemoryPoolDeleter {
     void operator()(T* ptr) {
@@ -97,7 +97,7 @@ struct MemoryPoolDeleter {
     }
 };
 
-// 从内存池分配对象的辅助函数
+// Helper function to allocate objects from memory pool
 template <typename T, typename... Args>
 std::unique_ptr<T, MemoryPoolDeleter<T>> make_pool_ptr(Args&&... args) {
     void* mem = MemoryPool::GetInstance().Allocate(sizeof(T));
@@ -105,7 +105,7 @@ std::unique_ptr<T, MemoryPoolDeleter<T>> make_pool_ptr(Args&&... args) {
     return std::unique_ptr<T, MemoryPoolDeleter<T>>(obj);
 }
 
-// 添加数组分配支持
+// Add array allocation support
 template <typename T>
 struct MemoryPoolArrayDeleter {
     size_t size;
@@ -114,7 +114,7 @@ struct MemoryPoolArrayDeleter {
     
     void operator()(T* ptr) {
         if (ptr) {
-            // 调用所有元素的析构函数
+            // Call destructors for all elements
             for (size_t i = 0; i < size; ++i) {
                 ptr[i].~T();
             }
@@ -123,7 +123,7 @@ struct MemoryPoolArrayDeleter {
     }
 };
 
-// 从内存池分配数组的辅助函数
+// Helper function to allocate arrays from memory pool
 template <typename T>
 std::unique_ptr<T[], MemoryPoolArrayDeleter<T>> make_pool_array(size_t n) {
     if (n == 0) return std::unique_ptr<T[], MemoryPoolArrayDeleter<T>>(nullptr, MemoryPoolArrayDeleter<T>(0));
@@ -131,7 +131,7 @@ std::unique_ptr<T[], MemoryPoolArrayDeleter<T>> make_pool_array(size_t n) {
     void* mem = MemoryPool::GetInstance().Allocate(sizeof(T) * n);
     T* arr = static_cast<T*>(mem);
     
-    // 使用默认构造函数初始化所有元素
+    // Use default constructor to initialize all elements
     for (size_t i = 0; i < n; ++i) {
         new(&arr[i]) T();
     }

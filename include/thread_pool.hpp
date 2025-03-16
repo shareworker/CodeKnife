@@ -39,10 +39,10 @@ public:
         return res;
     }
     
-    // 获取当前任务队列中的任务数量
+    // Get the current number of tasks in the queue
     size_t get_task_count() const;
     
-    // 获取线程池中的线程数量
+    // Get the number of threads in the pool
     size_t get_thread_count() const;
         
     ~ThreadPool();
