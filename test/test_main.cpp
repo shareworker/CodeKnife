@@ -478,7 +478,7 @@ void test_ipc_communication() {
     const int message_count = 1000;
     std::cout << "Sending " << message_count << " messages for performance testing..." << std::endl;
     
-    auto start_time = std::chrono::high_resolution_clock::now();
+    [[maybe_unused]] auto start_time = std::chrono::high_resolution_clock::now();
     
     // Client sends a large number of messages
     for (int i = 0; i < message_count; i++) {

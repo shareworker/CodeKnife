@@ -72,11 +72,10 @@ public:
         header_.timestamp = GetCurrentTimestampMs();
 
         if (payload_len > 0 && payload != nullptr) {
-            try {
-                payload_ = new uint8_t[payload_len];
+            payload_ = new(std::nothrow) uint8_t[payload_len];
+            if (payload_) {
                 std::memcpy(payload_, payload, payload_len);
-            } catch (const std::bad_alloc& e) {
-                payload_ = nullptr;
+            } else {
                 header_.payload_len = 0;
                 total_size_ = sizeof(PacketHeader) + sizeof(uint32_t);
             }
@@ -110,10 +109,10 @@ public:
 
         // Copy payload if present
         if (header_.payload_len > 0) {
-            try {
-                payload_ = new uint8_t[header_.payload_len];
+            payload_ = new(std::nothrow) uint8_t[header_.payload_len];
+            if (payload_) {
                 std::memcpy(payload_, static_cast<const uint8_t*>(data) + sizeof(PacketHeader), header_.payload_len);
-            } catch (const std::bad_alloc& e) {
+            } else {
                 header_.magic_id = 0; // Mark as invalid
                 header_.payload_len = 0;
                 total_size_ = 0;

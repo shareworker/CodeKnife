@@ -30,8 +30,14 @@ public:
             std::unique_lock<std::mutex> lock(queue_mutex);
 
             // don't allow enqueueing after stopping the pool
-            if(stop)
-                throw std::runtime_error("enqueue on stopped ThreadPool");
+            if(stop) {
+                // Return a future with an empty result for stopped pool
+                auto empty_task = std::make_shared<std::packaged_task<return_type()>>(
+                    []() -> return_type { return return_type{}; }
+                );
+                auto res = empty_task->get_future();
+                return res;
+            }
 
             tasks.emplace([task](){ (*task)(); });
         }

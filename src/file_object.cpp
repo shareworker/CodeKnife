@@ -14,7 +14,7 @@ namespace {
 inline int OpenRO(const std::string& path) {
     int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0) {
-        throw std::system_error(errno, std::generic_category(), "open read-only failed");
+        return -1;  // Failed to open
     }
     return fd;
 }
@@ -22,12 +22,12 @@ inline int OpenRO(const std::string& path) {
 inline int CreateFile(const std::string& path, const std::vector<uint8_t>& data) {
     int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
-        throw std::system_error(errno, std::generic_category(), "create file failed");
+        return -1;  // Failed to create
     }
     ssize_t written = ::write(fd, data.data(), data.size());
     if (written < 0 || static_cast<size_t>(written) != data.size()) {
         ::close(fd);
-        throw std::system_error(errno, std::generic_category(), "write file failed");
+        return -1;  // Failed to write
     }
     // reopen read-only for subsequent access
     ::close(fd);
@@ -37,7 +37,7 @@ inline int CreateFile(const std::string& path, const std::vector<uint8_t>& data)
 inline uint64_t FileSize(int fd) {
     struct stat st {};
     if (::fstat(fd, &st) != 0) {
-        throw std::system_error(errno, std::generic_category(), "fstat failed");
+        return 0;  // Failed to get file size
     }
     return static_cast<uint64_t>(st.st_size);
 }
@@ -91,12 +91,12 @@ FileObject FileObject::Open(const std::string& path) {
 
 std::vector<uint8_t> FileObject::Read(uint64_t offset, uint64_t len) const {
     if (!Valid()) {
-        throw std::invalid_argument("invalid file object");
+        return {};  // Return empty vector for invalid file
     }
     std::vector<uint8_t> buf(len);
     ssize_t n = ::pread(impl_->handle.Fd(), buf.data(), len, static_cast<off_t>(offset));
     if (n < 0 || static_cast<uint64_t>(n) != len) {
-        throw std::system_error(errno, std::generic_category(), "pread failed");
+        return {};  // Return empty vector on read failure
     }
     return buf;
 }

@@ -86,22 +86,20 @@ private:
     void init() {
         namespace fs = std::filesystem;
         
-        try {
-            if (config_.use_stdout) {
-                init_success_ = true;
-                return;
-            }
+        if (config_.use_stdout) {
+            init_success_ = true;
+            return;
+        }
 
-            if (!fs::exists(config_.log_dir)) {
-                fs::create_directories(config_.log_dir);
-            }
+        if (!fs::exists(config_.log_dir)) {
+            fs::create_directories(config_.log_dir);
+        }
 
-            rotate_log_files();
-            open_new_log_file();
+        rotate_log_files();
+        open_new_log_file();
 
-        } catch (const std::exception& e) {
-            init_success_ = false;
-            std::cerr << "Logger initialization failed: " << e.what() << std::endl;
+        if (!init_success_) {
+            std::cerr << "Logger initialization failed" << std::endl;
         }
     }
 

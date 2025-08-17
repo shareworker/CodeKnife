@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 
 namespace util {
@@ -15,7 +16,13 @@ FixedSizeMemoryPool::FixedSizeMemoryPool(size_t block_size, size_t initial_block
 
 FixedSizeMemoryPool::~FixedSizeMemoryPool() {
     for (auto block : blocks_) {
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+        // Use free for posix_memalign allocated memory
+        std::free(block);
+#else
+        // Use operator delete for operator new allocated memory
         ::operator delete(block);
+#endif
     }
 }
 
@@ -41,7 +48,8 @@ void FixedSizeMemoryPool::expand(size_t num_blocks) {
         // Use posix_memalign on supported platforms
         void* p = nullptr;
         if (posix_memalign(&p, alignment, aligned_size) != 0) {
-            throw std::bad_alloc();
+            // Failed to allocate, skip this block
+            continue;
         }
         blocks_[old_size + i] = static_cast<char*>(p);
 #else
@@ -180,16 +188,15 @@ void* MemoryPool::Allocate(size_t size) {
         // Align size to at least 8-byte boundaries for improved memory access efficiency
         size_t aligned_size = ((size + 7) / 8) * 8;
         
-        try {
-            ptr = ::operator new(aligned_size);
-            large_allocations_[ptr] = aligned_size;
-        } catch (const std::bad_alloc& e) {
+        ptr = ::operator new(aligned_size, std::nothrow);
+        if (!ptr) {
             // Handle memory allocation failure
             std::lock_guard<std::mutex> stats_lock(stats_mutex_);
             --current_allocations_;
             --total_allocations_;
-            throw; // Re-throw exception
+            return nullptr;
         }
+        large_allocations_[ptr] = aligned_size;
     }
     
     return ptr;

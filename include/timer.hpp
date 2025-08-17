@@ -116,7 +116,7 @@ private:
     };
 
     // Private constructor to ensure singleton pattern
-    Timer() : next_timer_id_(1), running_(true) {
+    Timer() : running_(true), next_timer_id_(1) {
         timer_thread_ = std::thread(&Timer::timer_loop, this);
     }
 

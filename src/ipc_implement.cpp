@@ -149,7 +149,7 @@ void IPCImplement::senderThreadFunc() {
     
     // Adaptive waiting parameters
     int consecutive_empty_checks = 0;
-    const int max_empty_checks = 5;
+    [[maybe_unused]] const int max_empty_checks = 5;
     const int min_wait_time = 10;
     const int max_wait_time = 100;
     
@@ -239,7 +239,7 @@ void IPCImplement::receiverThreadFunc() {
     
     // Track consecutive empty reads to implement adaptive waiting
     int consecutive_empty_reads = 0;
-    const int max_empty_reads = 5;
+    [[maybe_unused]] const int max_empty_reads = 5;
     const int min_sleep_ms = 1;
     const int max_sleep_ms = 50;
     
