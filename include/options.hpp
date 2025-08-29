@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 
-namespace util {
+namespace SAK {
 
 // Forward declarations
 class CompactionOptions;
@@ -43,4 +43,4 @@ public:
     Options() = default;
 };
 
-} // namespace util
+} // namespace SAK

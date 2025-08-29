@@ -5,7 +5,11 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace util {
+#ifdef _WIN32
+#include <intrin.h>
+#endif
+
+namespace SAK {
 namespace memory {
 
 // FixedSizeMemoryPool implementation
@@ -38,7 +42,14 @@ void FixedSizeMemoryPool::expand(size_t num_blocks) {
         
         // Ensure alignment is a power of 2
         if (alignment & (alignment - 1)) {
+#ifdef _WIN32
+            // Windows doesn't have __builtin_clzl, use _BitScanReverse
+            unsigned long index = 0;
+            _BitScanReverse(&index, static_cast<unsigned long>(alignment));
+            alignment = static_cast<size_t>(1) << (static_cast<size_t>(index) + 1);
+#else
             alignment = 1 << (sizeof(size_t) * 8 - __builtin_clzl(alignment));
+#endif
         }
         
         // Ensure block_size is a multiple of alignment
@@ -298,4 +309,4 @@ void MemoryPool::PrintStats() const {
 }
 
 } // namespace memory
-} // namespace util
+} // namespace SAK

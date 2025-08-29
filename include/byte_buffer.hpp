@@ -5,10 +5,9 @@
 #include <cstring>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <vector>
 
-namespace util {
+namespace SAK {
 
 /**
  * @brief A reference-counted byte buffer with zero-copy operations
@@ -25,23 +24,22 @@ public:
     ByteBuffer();
 
     /**
+     * @brief Creates a buffer from a null-terminated C-string
+     *
+     * This convenience constructor allows direct construction from string
+     * literals without requiring an explicit size argument.
+     *
+     * @param cstr Null-terminated C string
+     */
+    explicit ByteBuffer(const char* cstr);
+
+    /**
      * @brief Creates a buffer from raw bytes
      * 
      * @param data Pointer to the data
      * @param size Size of the data in bytes
      */
     ByteBuffer(const char* data, size_t size);
-
-    /**
-     * @brief Creates a buffer from a null-terminated C-string
-     *
-     * This convenience constructor allows direct construction from string
-     * literals without requiring an explicit size argument and avoids the
-     * previous overload ambiguity involving std::string and std::string_view.
-     *
-     * @param cstr Null-terminated C string
-     */
-    explicit ByteBuffer(const char* cstr);
 
     /**
      * @brief Creates a buffer from raw unsigned bytes
@@ -58,12 +56,6 @@ public:
      */
     explicit ByteBuffer(const std::string& str);
 
-    /**
-     * @brief Creates a buffer from a string view
-     * 
-     * @param str String view to copy data from
-     */
-    explicit ByteBuffer(std::string_view str);
 
     /**
      * @brief Creates a buffer from a vector of bytes
@@ -225,26 +217,28 @@ private:
     // Shared data storage with reference counting
     std::shared_ptr<const std::vector<char>> data_;
     
-    // Offset and size for slicing support
+    // Offset and size for slicing
     size_t offset_;
     size_t size_;
 };
 
-}  // namespace util
+} // namespace SAK
 
 namespace std {
-
 /**
- * @brief Hash function for ByteBuffer
+ * @brief Hash specialization for SAK::ByteBuffer
  * 
  * This allows ByteBuffer to be used as a key in unordered containers
  * like std::unordered_map and std::unordered_set.
  */
 template <>
-struct hash<util::ByteBuffer> {
-    size_t operator()(const util::ByteBuffer& buf) const {
-        return std::hash<std::string_view>{}(
-            std::string_view(buf.Data(), buf.Size()));
+struct hash<SAK::ByteBuffer> {
+    size_t operator()(const SAK::ByteBuffer& buf) const {
+        // Hash the raw data directly
+        const char* data = buf.Data();
+        size_t size = buf.Size();
+        std::hash<std::string> hasher;
+        return hasher(std::string(data, size));
     }
 };
 

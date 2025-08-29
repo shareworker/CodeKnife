@@ -1,6 +1,6 @@
 #include "../include/thread_pool.hpp"
 
-namespace util {
+namespace SAK {
 namespace thread {
 
 ThreadPool::ThreadPool(size_t threads) : stop(false) {
@@ -46,4 +46,4 @@ size_t ThreadPool::get_thread_count() const {
 }
 
 } // namespace thread
-} // namespace util
+} // namespace SAK

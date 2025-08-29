@@ -9,7 +9,7 @@
 #include <cassert>
 #include <atomic>
 
-namespace util {
+namespace SAK {
 namespace pool {
 
 /**
@@ -386,6 +386,6 @@ PooledObject<T, ResetFunction> make_pooled(ObjectPool<T, ResetFunction>& pool) {
 }
 
 } // namespace pool
-} // namespace util
+} // namespace SAK
 
 #endif // UTIL_OBJECT_POOL_HPP

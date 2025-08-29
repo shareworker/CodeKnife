@@ -3,34 +3,47 @@
 #include <string>
 #include <fstream>
 #include <memory>
-#include <filesystem>
-#include <chrono>
-#include <ctime>
-#include <unistd.h>
-#include <mutex>
-#include <sstream>
 #include <iostream>
+#include <mutex>
 #include <queue>
 #include <thread>
-#include <condition_variable>
+#include <chrono>
+#include <vector>
 #include <atomic>
+#include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
+#include <ctime>
+#include <sstream>
+// Platform-specific includes
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#include <process.h>
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
 
-namespace util {
+// Force C++20 std::filesystem usage
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
+#include <filesystem>
+namespace fs = std::filesystem;
+
+namespace SAK {
 namespace log {
 
 enum class Level {
-    DEBUG,
-    INFO,
-    WARNING,
-    ERROR
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARNING,
+    LOG_ERROR
 };
 
 struct LogConfig {
     std::string log_dir = "/tmp/.util_log";
     bool use_stdout = false;
-    Level min_level = Level::DEBUG;
+    Level min_level = Level::LOG_DEBUG;
     size_t max_file_size = 10 * 1024 * 1024;  // 10MB
     size_t max_files = 5;
     bool async_mode = true;
@@ -84,84 +97,80 @@ private:
     }
 
     void init() {
-        namespace fs = std::filesystem;
+        log_dir_ = fs::path(config_.log_dir);
+        max_file_size_ = config_.max_file_size;
         
         if (config_.use_stdout) {
             init_success_ = true;
             return;
         }
 
-        if (!fs::exists(config_.log_dir)) {
-            fs::create_directories(config_.log_dir);
+        if (!fs::exists(log_dir_)) {
+            fs::create_directories(log_dir_);
         }
 
-        rotate_log_files();
         open_new_log_file();
-
-        if (!init_success_) {
-            std::cerr << "Logger initialization failed" << std::endl;
-        }
+        init_success_ = file_stream_ && file_stream_->is_open();
     }
 
     void rotate_log_files() {
-        namespace fs = std::filesystem;
-        
-        if (!file_stream_) return;
-        
-        file_stream_->flush();
-        if (fs::file_size(current_log_path_) < config_.max_file_size) {
-            return;
+        if (file_stream_) {
+            file_stream_->close();
         }
-
-        // Rotate existing files
-        for (int i = config_.max_files - 1; i >= 0; --i) {
-            auto old_path = get_log_path(i);
-            auto new_path = get_log_path(i + 1);
-            if (fs::exists(old_path)) {
-                if (i == static_cast<int>(config_.max_files) - 1) {
-                    fs::remove(old_path);
-                } else {
-                    fs::rename(old_path, new_path);
-                }
-            }
-        }
-
-        file_stream_->close();
+        
+        // Simple rotation - create new file with timestamp
         open_new_log_file();
     }
 
-    std::filesystem::path get_log_path(int index) {
-        namespace fs = std::filesystem;
-        auto base_name = std::to_string(getpid()) + ".log";
-        if (index == 0) return fs::path(config_.log_dir) / base_name;
-        return fs::path(config_.log_dir) / (base_name + "." + std::to_string(index));
+    fs::path get_log_path() {
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        
+#ifdef _WIN32
+        auto pid = _getpid();
+#else
+        auto pid = getpid();
+#endif
+        
+        std::ostringstream filename;
+        filename << "log_" << pid << "_" << time_t << ".log";
+        return log_dir_ / filename.str();
     }
 
     void open_new_log_file() {
-        current_log_path_ = get_log_path(0);
+        current_log_path_ = get_log_path();
         file_stream_ = std::make_unique<std::ofstream>(
             current_log_path_, std::ios::out | std::ios::app);
-        init_success_ = file_stream_->is_open();
     }
 
     std::string format_log(Level level, const char* file, const char* func, int line, const std::string& message) {
         auto now = std::chrono::system_clock::now();
         std::time_t t = std::chrono::system_clock::to_time_t(now);
         char time_str[20];
+#ifdef _WIN32
+        struct tm tm_info;
+        localtime_s(&tm_info, &t);
+        std::strftime(time_str, sizeof(time_str), "%Y%m%d%H%M%S", &tm_info);
+#else
         std::strftime(time_str, sizeof(time_str), "%Y%m%d%H%M%S", std::localtime(&t));
+#endif
 
         std::string level_str;
         switch(level) {
-            case Level::DEBUG: level_str = "DEBUG"; break;
-            case Level::INFO: level_str = "INFO"; break;
-            case Level::WARNING: level_str = "WARNING"; break;
-            case Level::ERROR: level_str = "ERROR"; break;
+            case Level::LOG_DEBUG: level_str = "DEBUG"; break;
+            case Level::LOG_INFO: level_str = "INFO"; break;
+            case Level::LOG_WARNING: level_str = "WARNING"; break;
+            case Level::LOG_ERROR: level_str = "ERROR"; break;
         }
 
         std::ostringstream oss;
         oss << "[" << time_str << "] "
             << "[" << level_str << "] "
+#ifdef _WIN32
+            << "[" << _getpid() << "] "
+#else
             << "[" << getpid() << "] "
+#endif
             << "[" << file << ":" << func << ":" << line << "] "
             << message << "\n";
         return oss.str();
@@ -179,8 +188,7 @@ private:
             *file_stream_ << log_entry;
             file_stream_->flush();
             
-            namespace fs = std::filesystem;
-            if (fs::file_size(current_log_path_) >= config_.max_file_size) {
+            if (fs::exists(current_log_path_) && fs::file_size(current_log_path_) >= max_file_size_) {
                 rotate_log_files();
             }
         }
@@ -232,8 +240,9 @@ private:
     LogConfig config_;
     std::unique_ptr<std::ofstream> file_stream_;
     bool init_success_ = false;
-    std::mutex mutex_;
-    std::filesystem::path current_log_path_;
+    fs::path log_dir_;
+    fs::path current_log_path_;
+    size_t max_file_size_ = 10 * 1024 * 1024;  // 10MB
 
     // Async logging members
     std::queue<std::string> log_queue_;
@@ -241,19 +250,21 @@ private:
     std::condition_variable queue_cv_;
     std::thread async_thread_;
     std::atomic<bool> stop_flag_;
+    
+    std::mutex mutex_;
 };
 
 } // namespace log
-} // namespace util
+} // namespace SAK
 
 #define LOG_DEBUG(fmt, ...) \
-    util::log::Logger::instance().log(util::log::Level::DEBUG, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
+    SAK::log::Logger::instance().log(SAK::log::Level::LOG_DEBUG, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
 
 #define LOG_INFO(fmt, ...) \
-    util::log::Logger::instance().log(util::log::Level::INFO, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
+    SAK::log::Logger::instance().log(SAK::log::Level::LOG_INFO, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
 
 #define LOG_WARNING(fmt, ...) \
-    util::log::Logger::instance().log(util::log::Level::WARNING, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
+    SAK::log::Logger::instance().log(SAK::log::Level::LOG_WARNING, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
 
 #define LOG_ERROR(fmt, ...) \
-    util::log::Logger::instance().log(util::log::Level::ERROR, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)
+    SAK::log::Logger::instance().log(SAK::log::Level::LOG_ERROR, __FILE__, __FUNCTION__, __LINE__, fmt, ## __VA_ARGS__)

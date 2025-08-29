@@ -4,20 +4,29 @@
 #include <memory>
 #include <atomic>
 #include <cstdint>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/sem.h>
-#include <sys/types.h>
 #include <cstring>
 #include "logger.hpp"
 #include "ipc_packet.hpp"
 
-namespace util {
+// Platform-specific includes
+#ifdef _WIN32
+#include <windows.h>
+#include <memoryapi.h>
+#else
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <string>
+#include <atomic>
+#include <memory>
+#endif
+
+namespace SAK {
 namespace ipc {
 
 // Shared memory constants
 constexpr size_t SHM_BUFFER_SIZE = 1024 * 1024; // 1MB buffer size
 constexpr int SHM_PERMISSIONS = 0666;           // Read/write permissions
+constexpr int SEM_PERMISSIONS = 0666;           // Semaphore permissions
 
 // Semaphore indices
 enum SEM_INDEX {
@@ -66,7 +75,7 @@ public:
 
 private:
     // Generate a unique key for shared memory and semaphores
-    key_t GenerateKey(const std::string& name, bool is_sem);
+    int GenerateKey(const std::string& name, bool is_sem);
     
     // Semaphore operations
     bool CreateSemaphore();
@@ -82,18 +91,24 @@ private:
     std::string ipc_name_;
     bool is_server_;
     
+    // Keys for POSIX IPC
+    int shm_key_;
+    int sem_key_;
+    
     // Shared memory
-    key_t shm_key_;
+#ifdef _WIN32
+    HANDLE shm_handle_;
+    HANDLE sem_handles_[SEM_COUNT];
+#else
     int shm_id_;
+    int sem_id_;
+#endif
+    
     SharedMemoryBuffer* shm_buffer_;
     
-    // Semaphores
-    key_t sem_key_;
-    int sem_id_;
-    
     // State
-    bool initialized_;
+    bool initialized_ = false;
 };
 
 } // namespace ipc
-} // namespace util
+} // namespace SAK

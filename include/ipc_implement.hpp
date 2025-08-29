@@ -9,7 +9,7 @@
 #include <condition_variable>
 #include "ipc_shared_memory.hpp"
 
-namespace util {
+namespace SAK {
 namespace ipc {
 
 // Forward declarations
@@ -113,4 +113,4 @@ private:
 };
 
 } // namespace ipc
-} // namespace util
+} // namespace SAK

@@ -13,7 +13,7 @@
 // Define this macro to validate pointers on deallocation
 // #define MEMORY_POOL_VALIDATE_POINTERS
 
-namespace util {
+namespace SAK {
 namespace memory {
 
 // Memory pool for fixed-size memory blocks
@@ -140,4 +140,4 @@ std::unique_ptr<T[], MemoryPoolArrayDeleter<T>> make_pool_array(size_t n) {
 }
 
 } // namespace memory
-} // namespace util
+} // namespace SAK

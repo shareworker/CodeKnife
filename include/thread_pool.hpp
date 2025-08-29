@@ -9,7 +9,7 @@
 #include <functional>
 #include <stdexcept>
 
-namespace util {
+namespace SAK {
 namespace thread {
 
 class ThreadPool {
@@ -18,8 +18,8 @@ public:
     
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args) 
-        -> std::future<typename std::result_of<F(Args...)>::type> {
-        using return_type = typename std::result_of<F(Args...)>::type;
+        -> std::future<decltype(std::declval<F>()(std::declval<Args>()...))> {
+        using return_type = decltype(std::declval<F>()(std::declval<Args>()...));
 
         auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)
@@ -63,4 +63,4 @@ private:
 };
 
 } // namespace thread
-} // namespace util
+} // namespace SAK

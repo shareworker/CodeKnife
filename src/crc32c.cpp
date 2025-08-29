@@ -2,8 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
+#include <vector>
 
-namespace util {
+namespace SAK {
 
 // Static variable initialization
 std::array<uint32_t, 256> Crc32c::table0_ = {};
@@ -21,7 +23,7 @@ void Crc32c::Initialize() {
     for (uint32_t i = 0; i < 256; i++) {
         uint32_t crc = i;
         for (uint32_t j = 0; j < 8; j++) {
-            crc = (crc >> 1) ^ (kPolynomial & -(crc & 1));
+            crc = (crc >> 1) ^ ((crc & 1) ? 0x82F63B78 : 0);
         }
         table0_[i] = crc;
     }
@@ -79,4 +81,4 @@ uint32_t Crc32c::Compute(const std::vector<uint8_t>& data) {
     return Compute(data.data(), data.size());
 }
 
-}  // namespace util
+}  // namespace SAK

@@ -15,10 +15,10 @@ void test_logger() {
     std::cout << "\n===== Test the logger module =====\n" << std::endl;
     
     // Configure the logger
-    util::log::LogConfig config;
+    SAK::log::LogConfig config;
     config.use_stdout = true;  // Output to the console for easy viewing
-    config.min_level = util::log::Level::DEBUG;
-    util::log::Logger::instance().configure(config);
+    config.min_level = SAK::log::Level::LOG_DEBUG;
+    SAK::log::Logger::instance().configure(config);
     
     // Test different levels of logging
     LOG_DEBUG("This is a debug log");
@@ -33,7 +33,7 @@ void test_logger() {
 void test_thread_pool() {
     std::cout << "\n===== Test the thread pool =====\n" << std::endl;
     
-    util::thread::ThreadPool pool(4);
+    SAK::thread::ThreadPool pool(4);
     std::cout << "Created a thread pool with " << pool.get_thread_count() << " threads" << std::endl;
     
     // Submit some tasks
@@ -61,7 +61,7 @@ void test_thread_pool() {
 void test_memory_pool() {
     std::cout << "\n===== Test the memory pool =====\n" << std::endl;
     
-    auto& pool = util::memory::MemoryPool::GetInstance();
+    auto& pool = SAK::memory::MemoryPool::GetInstance();
     
     // Allocate and deallocate different sizes of memory
     std::vector<void*> pointers;
@@ -87,14 +87,14 @@ void test_memory_pool() {
     // Test smart pointers
     std::cout << "\nTest memory pool smart pointers:" << std::endl;
     {
-        auto ptr = util::memory::make_pool_ptr<std::string>("This is a string allocated from the memory pool");
+        auto ptr = SAK::memory::make_pool_ptr<std::string>("This is a string allocated from the memory pool");
         std::cout << "Created a memory pool smart pointer: " << *ptr << std::endl;
     }
     
     // Test the new array allocation feature
     std::cout << "\nTest memory pool array allocation:" << std::endl;
     {
-        auto arr = util::memory::make_pool_array<int>(10);
+        auto arr = SAK::memory::make_pool_array<int>(10);
         for (int i = 0; i < 10; ++i) {
             arr[i] = i * i;
         }
@@ -171,7 +171,7 @@ void test_object_pool() {
     std::cout << "\n----- Basic object pool functionality -----\n" << std::endl;
     
     // Create an object pool with default settings
-    util::pool::ObjectPool<TestObject> pool(5);
+    SAK::pool::ObjectPool<TestObject> pool(5);
     
     std::cout << "Initial pool stats - Available: " << pool.available_count() 
               << ", Active: " << pool.active_count() 
@@ -205,9 +205,9 @@ void test_object_pool() {
     // Test with reset function
     std::cout << "\n----- Object pool with reset function -----\n" << std::endl;
     
-    util::pool::ObjectPool<TestObject> reset_pool(
+    SAK::pool::ObjectPool<TestObject> reset_pool(
         5, 
-        util::pool::GrowthPolicy::Multiplicative,
+        SAK::pool::GrowthPolicy::Multiplicative,
         2,
         [](TestObject& obj) { obj.reset(); }
     );
@@ -227,9 +227,9 @@ void test_object_pool() {
     std::cout << "\n----- Growth policy tests -----\n" << std::endl;
     
     // Test multiplicative growth
-    util::pool::ObjectPool<TestObject> mult_pool(
+    SAK::pool::ObjectPool<TestObject> mult_pool(
         2,  // Start with just 2 objects
-        util::pool::GrowthPolicy::Multiplicative,
+        SAK::pool::GrowthPolicy::Multiplicative,
         2   // Double when empty
     );
     
@@ -250,9 +250,9 @@ void test_object_pool() {
     mult_objects.clear();
     
     // Test additive growth
-    util::pool::ObjectPool<TestObject> add_pool(
+    SAK::pool::ObjectPool<TestObject> add_pool(
         2,  // Start with just 2 objects
-        util::pool::GrowthPolicy::Additive,
+        SAK::pool::GrowthPolicy::Additive,
         3   // Add 3 when empty
     );
     
@@ -273,9 +273,9 @@ void test_object_pool() {
     add_objects.clear();
     
     // Test fixed policy (no growth)
-    util::pool::ObjectPool<TestObject> fixed_pool(
+    SAK::pool::ObjectPool<TestObject> fixed_pool(
         3,  // Start with 3 objects
-        util::pool::GrowthPolicy::Fixed,
+        SAK::pool::GrowthPolicy::Fixed,
         0   // Growth size doesn't matter for fixed policy
     );
     
@@ -304,11 +304,11 @@ void test_object_pool() {
     // Test RAII wrapper
     std::cout << "\n----- RAII wrapper tests -----\n" << std::endl;
     
-    util::pool::ObjectPool<TestObject> raii_pool(5);
+    SAK::pool::ObjectPool<TestObject> raii_pool(5);
     
     {
         // Create a scope for the pooled object
-        auto pooled_obj = util::pool::make_pooled(raii_pool);
+        auto pooled_obj = SAK::pool::make_pooled(raii_pool);
         pooled_obj->setValue(100);
         
         std::cout << "Pooled object value: " << pooled_obj->getValue() << std::endl;
@@ -322,9 +322,9 @@ void test_object_pool() {
     // Test multithreaded usage
     std::cout << "\n----- Multithreaded object pool tests -----\n" << std::endl;
     
-    util::pool::ObjectPool<TestObject> mt_pool(
+    SAK::pool::ObjectPool<TestObject> mt_pool(
         20,  // Start with 20 objects
-        util::pool::GrowthPolicy::Multiplicative,
+        SAK::pool::GrowthPolicy::Multiplicative,
         2,
         [](TestObject& obj) { obj.reset(); }
     );
@@ -338,7 +338,7 @@ void test_object_pool() {
     auto thread_func = [&mt_pool, ops_per_thread](int thread_id) {
         for (int i = 0; i < ops_per_thread; ++i) {
             // Acquire an object
-            auto obj = util::pool::make_pooled(mt_pool);
+            auto obj = SAK::pool::make_pooled(mt_pool);
             
             // Do something with the object
             obj->setValue(thread_id * 1000 + i);
@@ -366,7 +366,7 @@ void test_object_pool() {
     std::cout << "\n----- Trim functionality tests -----\n" << std::endl;
     
     // Create a pool and grow it
-    util::pool::ObjectPool<TestObject> trim_pool(5);
+    SAK::pool::ObjectPool<TestObject> trim_pool(5);
     
     // Acquire and release many objects to grow the pool
     for (int i = 0; i < 20; ++i) {
@@ -390,7 +390,7 @@ void test_timer() {
     std::cout << "\n===== Test the timer module =====\n" << std::endl;
     
     // Test a one-time timer
-    auto timer_id = util::timer::schedule_once(500, []() {
+    auto timer_id = SAK::timer::schedule_once(500, []() {
         std::cout << "One-time timer triggered" << std::endl;
     });
     
@@ -410,8 +410,8 @@ void test_ipc_communication() {
     
     // Create server and client IPC implementations
     std::cout << "Creating server and client..." << std::endl;
-    util::ipc::IPCImplement server_ipc(ipc_name, true);  // Server
-    util::ipc::IPCImplement client_ipc(ipc_name, false); // Client
+    SAK::ipc::IPCImplement server_ipc(ipc_name, true);  // Server
+    SAK::ipc::IPCImplement client_ipc(ipc_name, false); // Client
     
     // Start IPC communication
     std::cout << "Starting server..." << std::endl;
@@ -527,7 +527,7 @@ void benchmark_memory_pool() {
         std::chrono::duration<double, std::milli> std_time = end_std - start_std;
         
         // Use memory pool
-        auto& pool = util::memory::MemoryPool::GetInstance();
+        auto& pool = SAK::memory::MemoryPool::GetInstance();
         auto start_pool = std::chrono::high_resolution_clock::now();
         std::vector<void*> pool_ptrs;
         pool_ptrs.reserve(iterations);
@@ -581,7 +581,7 @@ void benchmark_memory_pool() {
     std::chrono::duration<double, std::milli> std_mt_time = end_std_mt - start_std_mt;
     
     // Memory pool multithreaded test
-    auto& pool = util::memory::MemoryPool::GetInstance();
+    auto& pool = SAK::memory::MemoryPool::GetInstance();
     auto start_pool_mt = std::chrono::high_resolution_clock::now();
     
     std::vector<std::thread> pool_threads;
@@ -651,9 +651,9 @@ void benchmark_object_pool() {
     std::chrono::duration<double, std::milli> std_time = end_std - start_std;
     
     // Test object pool
-    util::pool::ObjectPool<BenchmarkObject> pool(
+    SAK::pool::ObjectPool<BenchmarkObject> pool(
         1000,  // Initial size
-        util::pool::GrowthPolicy::Multiplicative,
+        SAK::pool::GrowthPolicy::Multiplicative,
         2,
         [](BenchmarkObject& obj) { obj.reset(); }
     );
@@ -673,7 +673,7 @@ void benchmark_object_pool() {
     auto start_raii = std::chrono::high_resolution_clock::now();
     
     for (int i = 0; i < iterations; ++i) {
-        auto obj = util::pool::make_pooled(pool);
+        auto obj = SAK::pool::make_pooled(pool);
         obj->setData(i * 2);
     }
     
@@ -722,9 +722,9 @@ void benchmark_object_pool() {
     std::chrono::duration<double, std::milli> std_mt_time = end_std_mt - start_std_mt;
     
     // Object pool multithreaded test
-    util::pool::ObjectPool<BenchmarkObject> mt_pool(
+    SAK::pool::ObjectPool<BenchmarkObject> mt_pool(
         1000,  // Initial size
-        util::pool::GrowthPolicy::Multiplicative,
+        SAK::pool::GrowthPolicy::Multiplicative,
         2,
         [](BenchmarkObject& obj) { obj.reset(); }
     );

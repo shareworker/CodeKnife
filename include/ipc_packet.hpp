@@ -4,9 +4,17 @@
 #include <string>
 #include <cstring>
 #include <chrono>
+#include <memory>
 #include "logger.hpp"
 
-namespace util {
+// Platform-specific includes
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
+namespace SAK {
 namespace ipc {
 
 // Magic ID "UTIL" in ASCII
@@ -14,10 +22,10 @@ constexpr uint32_t IPC_PACKET_MAGIC = 0x5554494C; // "UTIL" in little-endian
 
 // Message types
 enum class MessageType : uint8_t {
-    REQUEST = 0x01,
-    RESPONSE = 0x02,
-    HEARTBEAT = 0x03,
-    ERROR = 0x04,
+    MSG_REQUEST = 0x01,
+    MSG_RESPONSE = 0x02,
+    MSG_HEARTBEAT = 0x03,
+    MSG_ERROR = 0x04,
     // 0x05-0xFF reserved for future use
 };
 
@@ -46,7 +54,7 @@ public:
     {
         header_.magic_id = IPC_PACKET_MAGIC;
         header_.version = 1;
-        header_.msg_type = static_cast<uint8_t>(MessageType::REQUEST);
+        header_.msg_type = static_cast<uint8_t>(MessageType::MSG_REQUEST);
         header_.reserved = 0;
         header_.payload_len = 0;
         header_.seq_num = 0;
@@ -205,11 +213,11 @@ public:
     // Validate the packet's checksum and structure
     bool IsValid() const {
         if (header_.magic_id != IPC_PACKET_MAGIC || total_size_ == 0) {
-            LOG_ERROR("Invalid magic ID %u or total size %u", header_.magic_id, total_size_);
+            SAK::log::Logger::instance().log(SAK::log::Level::LOG_DEBUG, __FILE__, __FUNCTION__, __LINE__, "Invalid magic ID %u or total size %u", header_.magic_id, total_size_);
             return false;
         }
         if (header_.payload_len > 0 && payload_ == nullptr) {
-            LOG_ERROR("Invalid payload");
+            SAK::log::Logger::instance().log(SAK::log::Level::LOG_ERROR, __FILE__, __FUNCTION__, __LINE__, "Invalid payload");
             return false;
         }
         uint32_t calculated_checksum = CalculateChecksumInternal();
@@ -264,4 +272,4 @@ private:
 };
 
 } // namespace ipc
-} // namespace util
+} // namespace SAK

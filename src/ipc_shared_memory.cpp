@@ -1,15 +1,35 @@
 #include "ipc_shared_memory.hpp"
 #include "ipc_packet.hpp"
 #include <errno.h>
+#include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
+#endif
 
-namespace util {
+namespace SAK {
 namespace ipc {
 
 IPCSharedMemory::IPCSharedMemory(const std::string& ipc_name, bool is_server)
-    : ipc_name_(ipc_name), is_server_(is_server), shm_key_(0), shm_id_(-1), shm_buffer_(nullptr),
-      sem_key_(0), sem_id_(-1), initialized_(false) {}
+    : ipc_name_(ipc_name), is_server_(is_server), shm_key_(0), sem_key_(0),
+      shm_buffer_(nullptr), initialized_(false) {
+#ifdef _WIN32
+    shm_handle_ = nullptr;
+    for (int i = 0; i < SEM_COUNT; i++) {
+        sem_handles_[i] = nullptr;
+    }
+#else
+    shm_id_ = -1;
+    sem_id_ = -1;
+#endif
+}
 
 IPCSharedMemory::~IPCSharedMemory() {
     Uninit();
@@ -61,7 +81,13 @@ bool IPCSharedMemory::Uninit() {
     bool result = true;
 
     if (shm_buffer_) {
+#ifdef _WIN32
+        if (!UnmapViewOfFile(shm_buffer_)) {
+            LOG_ERROR("Failed to unmap shared memory: %lu", GetLastError());
+#else
         if (shmdt(shm_buffer_) == -1) {
+            LOG_ERROR("Failed to detach shared memory: %s", strerror(errno));
+#endif
             LOG_ERROR("Failed to detach shared memory: %s", strerror(errno));
             result = false;
         }
@@ -70,18 +96,34 @@ bool IPCSharedMemory::Uninit() {
 
     // Only destroy resources if we're the server
     if (is_server_) {
+#ifndef _WIN32
         if (shm_id_ != -1) {
+#endif
             if (!DestroySharedMemory()) {
                 LOG_ERROR("Failed to destroy shared memory");
                 result = false;
             }
+#ifndef _WIN32
         }
-
+#endif
+#ifdef _WIN32
+        if (shm_handle_ != nullptr) {
+            DestroySharedMemory();
+        }
+        if (sem_handles_[0] != nullptr) {
+            DestroySemaphore();
+        }
+#else
+        if (shm_id_ != -1) {
+            DestroySharedMemory();
+        }
         if (sem_id_ != -1) {
-            if (!DestroySemaphore()) {
-                LOG_ERROR("Failed to destroy semaphores");
-                result = false;
-            }
+            DestroySemaphore();
+        }
+#endif
+        if (!DestroySemaphore()) {
+            LOG_ERROR("Failed to destroy semaphores");
+            result = false;
         }
     }
 
@@ -212,7 +254,7 @@ bool IPCSharedMemory::ReadPacket(IPCPacket* packet) {
     }
     
     // Read packet header to get total size
-    util::ipc::PacketHeader header;
+    SAK::ipc::PacketHeader header;
     std::memcpy(&header, buffer + current_read_pos, sizeof(header));
     
     // Validate magic ID
@@ -251,10 +293,10 @@ bool IPCSharedMemory::ReadPacket(IPCPacket* packet) {
     return true;
 }
 
-key_t IPCSharedMemory::GenerateKey(const std::string& name, bool is_sem) {
+int IPCSharedMemory::GenerateKey(const std::string& name, bool is_sem) {
     // Generate a unique key based on the IPC name and type
     // Use a hash of the name instead of ftok since ftok requires an existing file
-    key_t key = 0;
+    int key = 0;
     std::string key_str = name + (is_sem ? "_sem" : "_shm");
     
     // Simple hash function to generate a key from the string
@@ -274,6 +316,18 @@ key_t IPCSharedMemory::GenerateKey(const std::string& name, bool is_sem) {
 
 bool IPCSharedMemory::CreateSharedMemory() {
     // Try to get existing shared memory
+#ifdef _WIN32
+    // Windows uses named shared memory
+    std::string shm_name = "Global\\" + ipc_name_ + "_shm";
+    shm_handle_ = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, shm_name.c_str());
+    if (shm_handle_ == nullptr) {
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND) {
+            LOG_ERROR("Failed to open shared memory: %lu", error);
+            return false;
+        }
+    }
+#else
     shm_id_ = shmget(shm_key_, sizeof(SharedMemoryBuffer), 0);
     
     if (shm_id_ == -1) {
@@ -289,9 +343,18 @@ bool IPCSharedMemory::CreateSharedMemory() {
     } else {
         LOG_DEBUG("Using existing shared memory segment with ID %d", shm_id_);
     }
+#endif
     
     // Attach to shared memory
+#ifdef _WIN32
+    shm_buffer_ = (SharedMemoryBuffer*)MapViewOfFile(shm_handle_, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(SharedMemoryBuffer));
+    if (shm_buffer_ == nullptr) {
+        LOG_ERROR("Failed to map shared memory: %lu", GetLastError());
+        return false;
+    }
+#else
     shm_buffer_ = (SharedMemoryBuffer*)shmat(shm_id_, nullptr, 0);
+#endif
     
     if (shm_buffer_ == (void*)-1) {
         LOG_ERROR("Failed to attach to shared memory: %s", strerror(errno));
@@ -302,94 +365,18 @@ bool IPCSharedMemory::CreateSharedMemory() {
     return true;
 }
 
-bool IPCSharedMemory::DestroySharedMemory() {
-    if (shm_id_ != -1) {
-        if (shmctl(shm_id_, IPC_RMID, nullptr) == -1) {
-            LOG_ERROR("Failed to destroy shared memory: %s", strerror(errno));
-            return false;
-        }
-        shm_id_ = -1;
-    }
-    return true;
-}
-
-bool IPCSharedMemory::CreateSemaphore() {
-    // Try to get existing semaphore
-    sem_id_ = semget(sem_key_, SEM_COUNT, 0);
-    
-    if (sem_id_ == -1) {
-        // Create new semaphore if it doesn't exist
-        sem_id_ = semget(sem_key_, SEM_COUNT, IPC_CREAT | SHM_PERMISSIONS);
-        
-        if (sem_id_ == -1) {
-            LOG_ERROR("Failed to create semaphore: %s", strerror(errno));
-            return false;
-        }
-        
-        LOG_DEBUG("Created new semaphore set with ID %d", sem_id_);
-        
-        // Initialize semaphores if we created them
-        if (is_server_) {
-            union semun {
-                int val;
-                struct semid_ds* buf;
-                unsigned short* array;
-            } arg;
-            
-            // Initialize all semaphores
-            for (int i = 0; i < SEM_COUNT; i++) {
-                // Initialize write semaphores to 1 (available)
-                // and read semaphores to 0 (not available until data is written)
-                int init_val = (i == SEM_SERVER_WRITE || i == SEM_CLIENT_WRITE) ? 1 : 0;
-                
-                arg.val = init_val;
-                
-                if (semctl(sem_id_, i, SETVAL, arg) == -1) {
-                    LOG_ERROR("Failed to initialize semaphore %d: %s", i, strerror(errno));
-                    return false;
-                }
-            }
-            
-            LOG_DEBUG("Initialized semaphores");
-        }
-    } else {
-        LOG_DEBUG("Using existing semaphore set with ID %d", sem_id_);
-    }
-    
-    return true;
-}
-
-bool IPCSharedMemory::DestroySemaphore() {
-    if (sem_id_ != -1) {
-        if (semctl(sem_id_, 0, IPC_RMID) == -1) {
-            LOG_ERROR("Failed to destroy semaphore: %s", strerror(errno));
-            return false;
-        }
-        sem_id_ = -1;
-    }
-    return true;
-}
-
-bool IPCSharedMemory::SemaphoreWait(int sem_index) {
-    if (sem_id_ == -1) {
-        LOG_ERROR("Invalid semaphore ID");
-        return false;
-    }
-    
-    struct sembuf op;
-    op.sem_num = sem_index;
-    op.sem_op = -1;  // Decrement by 1
-    op.sem_flg = 0;  // Wait indefinitely
-    
-    if (semop(sem_id_, &op, 1) == -1) {
-        LOG_ERROR("Failed to wait for semaphore %d: %s", sem_index, strerror(errno));
-        return false;
-    }
-    
-    return true;
-}
-
 bool IPCSharedMemory::SemaphoreSignal(int sem_index) {
+#ifdef _WIN32
+    if (sem_handles_[sem_index] == nullptr) {
+        LOG_ERROR("Invalid semaphore handle");
+        return false;
+    }
+    
+    if (!ReleaseSemaphore(sem_handles_[sem_index], 1, nullptr)) {
+        LOG_ERROR("Failed to signal semaphore: %lu", GetLastError());
+        return false;
+    }
+#else
     if (sem_id_ == -1) {
         LOG_ERROR("Invalid semaphore ID");
         return false;
@@ -404,9 +391,114 @@ bool IPCSharedMemory::SemaphoreSignal(int sem_index) {
         LOG_ERROR("Failed to signal semaphore %d: %s", sem_index, strerror(errno));
         return false;
     }
+#endif
     
     return true;
 }
 
+bool IPCSharedMemory::CreateSemaphore() {
+#ifdef _WIN32
+    for (int i = 0; i < SEM_COUNT; i++) {
+        std::string sem_name = "Global\\" + ipc_name_ + "_sem" + std::to_string(i);
+        sem_handles_[i] = ::CreateSemaphoreA(nullptr, 1, 1, sem_name.c_str());
+        if (sem_handles_[i] == nullptr) {
+            LOG_ERROR("Failed to create semaphore %d: %lu", i, GetLastError());
+            return false;
+        }
+    }
+#else
+    sem_id_ = semget(sem_key_, SEM_COUNT, IPC_CREAT | SEM_PERMISSIONS);
+    if (sem_id_ == -1) {
+        LOG_ERROR("Failed to create semaphore: %s", strerror(errno));
+        return false;
+    }
+    
+    // Initialize semaphores
+    union semun {
+        int val;
+        struct semid_ds *buf;
+        unsigned short *array;
+    } sem_union;
+    
+    sem_union.val = 1;
+    for (int i = 0; i < SEM_COUNT; i++) {
+        if (semctl(sem_id_, i, SETVAL, sem_union) == -1) {
+            LOG_ERROR("Failed to initialize semaphore %d: %s", i, strerror(errno));
+            return false;
+        }
+    }
+#endif
+    return true;
+}
+
+bool IPCSharedMemory::SemaphoreWait(int sem_index) {
+#ifdef _WIN32
+    if (sem_handles_[sem_index] == nullptr) {
+        LOG_ERROR("Invalid semaphore handle");
+        return false;
+    }
+    
+    DWORD result = WaitForSingleObject(sem_handles_[sem_index], INFINITE);
+    if (result != WAIT_OBJECT_0) {
+        LOG_ERROR("Failed to wait for semaphore: %lu", GetLastError());
+        return false;
+    }
+#else
+    if (sem_id_ == -1) {
+        LOG_ERROR("Invalid semaphore ID");
+        return false;
+    }
+    
+    struct sembuf op;
+    op.sem_num = sem_index;
+    op.sem_op = -1;
+    op.sem_flg = 0;
+    
+    if (semop(sem_id_, &op, 1) == -1) {
+        LOG_ERROR("Failed to wait for semaphore %d: %s", sem_index, strerror(errno));
+        return false;
+    }
+#endif
+    return true;
+}
+
+bool IPCSharedMemory::DestroySemaphore() {
+#ifdef _WIN32
+    for (int i = 0; i < SEM_COUNT; i++) {
+        if (sem_handles_[i] != nullptr) {
+            CloseHandle(sem_handles_[i]);
+            sem_handles_[i] = nullptr;
+        }
+    }
+#else
+    if (sem_id_ != -1) {
+        if (semctl(sem_id_, 0, IPC_RMID) == -1) {
+            LOG_ERROR("Failed to destroy semaphore: %s", strerror(errno));
+            return false;
+        }
+        sem_id_ = -1;
+    }
+#endif
+    return true;
+}
+
+bool IPCSharedMemory::DestroySharedMemory() {
+#ifdef _WIN32
+    if (shm_handle_ != nullptr) {
+        CloseHandle(shm_handle_);
+        shm_handle_ = nullptr;
+    }
+#else
+    if (shm_id_ != -1) {
+        if (shmctl(shm_id_, IPC_RMID, nullptr) == -1) {
+            LOG_ERROR("Failed to destroy shared memory: %s", strerror(errno));
+            return false;
+        }
+        shm_id_ = -1;
+    }
+#endif
+    return true;
+}
+
 } // namespace ipc
-} // namespace util
+} // namespace SAK

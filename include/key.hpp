@@ -13,7 +13,7 @@
 
 #include "byte_buffer.hpp"
 
-namespace util {
+namespace SAK {
 
 // Constant to enable/disable timestamp functionality
 constexpr bool TS_ENABLED = false;
@@ -507,4 +507,4 @@ private:
 
 #endif // End of #if 0 conditional directive
 
-} // namespace util
+} // namespace SAK

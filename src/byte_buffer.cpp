@@ -1,10 +1,9 @@
 #include "../include/byte_buffer.hpp"
 
-#include <algorithm>
 #include <cstring>
 #include <utility>
 
-namespace util {
+namespace SAK {
 
 ByteBuffer::ByteBuffer()
     : data_(std::make_shared<std::vector<char>>()),
@@ -35,11 +34,7 @@ ByteBuffer::ByteBuffer(const std::string& str)
       size_(str.size()) {
 }
 
-ByteBuffer::ByteBuffer(std::string_view str)
-    : data_(std::make_shared<std::vector<char>>(str.begin(), str.end())),
-      offset_(0),
-      size_(str.size()) {
-}
+// Note: Removed string_view constructor to avoid C++20 compatibility issues
 
 ByteBuffer::ByteBuffer(const std::vector<uint8_t>& vec)
     : data_(std::make_shared<std::vector<char>>(
@@ -181,4 +176,4 @@ ByteBuffer::ByteBuffer(std::shared_ptr<const std::vector<char>> data, size_t off
       size_(size) {
 }
 
-}  // namespace util
+} // namespace SAK

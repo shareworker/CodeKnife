@@ -4,10 +4,10 @@
 // as a header-only template class. However, we provide this source file to allow
 // for potential future non-template implementations or extensions.
 
-namespace util {
+namespace SAK {
 namespace pool {
 
 // Any non-template utility functions or implementations would go here
 
 } // namespace pool
-} // namespace util
+} // namespace SAK

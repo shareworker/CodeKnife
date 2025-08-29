@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-namespace util {
+namespace SAK {
 
 /**
  * @brief Implementation of CRC32C (Castagnoli polynomial 0x1EDC6F41)
@@ -54,4 +54,4 @@ private:
     static bool initialized_;
 };
 
-}  // namespace util
+} // namespace SAK

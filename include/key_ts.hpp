@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace util {
+namespace SAK {
 
 /**
  * @brief Composite key structure for MVCC that combines a user key with a timestamp.
@@ -98,4 +98,4 @@ private:
     uint64_t ts_;    // Timestamp
 };
 
-} // namespace util
+} // namespace SAK

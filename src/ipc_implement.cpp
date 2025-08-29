@@ -7,7 +7,7 @@
 #include <mutex>
 #include <condition_variable>
 
-namespace util {
+namespace SAK {
 namespace ipc {
 
 IPCImplement::IPCImplement(const std::string& ipc_name, bool is_server)
@@ -196,7 +196,7 @@ void IPCImplement::senderThreadFunc() {
         if (has_message && shared_memory_) {
             // Create packet with message as payload
             IPCPacket packet(
-                is_server_ ? MessageType::RESPONSE : MessageType::REQUEST,
+                is_server_ ? MessageType::MSG_RESPONSE : MessageType::MSG_REQUEST,
                 0, // sequence number
                 message.data(),
                 message.size()
@@ -291,4 +291,4 @@ void IPCImplement::receiverThreadFunc() {
 }
 
 } // namespace ipc
-} // namespace util
+} // namespace SAK
