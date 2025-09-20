@@ -12,9 +12,9 @@ ThreadPool::ThreadPool(size_t threads) : stop(false) {
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
                         this->condition.wait(lock,
-                            [this] { return this->stop || !this->tasks.empty(); });
-                        
-                        if(this->stop && this->tasks.empty())
+                            [this] { return this->stop.load() || !this->tasks.empty(); });
+
+                        if(this->stop.load() && this->tasks.empty())
                             return;
                             
                         task = std::move(this->tasks.front());
@@ -27,17 +27,17 @@ ThreadPool::ThreadPool(size_t threads) : stop(false) {
 }
 
 ThreadPool::~ThreadPool() {
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex);
-        stop = true;
-    }
+    stop.store(true);
     condition.notify_all();
-    for(std::thread &worker: workers)
-        worker.join();
+    for(std::thread &worker: workers) {
+        if(worker.joinable()) {
+            worker.join();
+        }
+    }
 }
 
 size_t ThreadPool::get_task_count() const {
-    std::unique_lock<std::mutex> lock(queue_mutex);
+    std::lock_guard<std::mutex> lock(queue_mutex);
     return tasks.size();
 }
 

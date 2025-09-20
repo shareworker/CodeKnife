@@ -104,7 +104,7 @@ private:
     std::mutex send_mutex_;
     std::condition_variable send_cv_;
     std::queue<std::string> send_queue_;
-    
+
     // Receiver thread and queue
     std::thread receiver_thread_;
     std::mutex receive_mutex_;

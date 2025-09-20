@@ -44,6 +44,9 @@ struct SharedMemoryHeader {
     std::atomic<uint32_t> server_read_pos;   // Position where server reads
     std::atomic<uint32_t> client_write_pos;  // Position where client writes
     std::atomic<uint32_t> client_read_pos;   // Position where client reads
+
+    // Note: For cross-process atomic operations, always use std::memory_order_seq_cst
+    // to ensure proper synchronization between processes on all architectures
 };
 
 struct SharedMemoryBuffer {
@@ -80,6 +83,8 @@ private:
     // Semaphore operations
     bool CreateSemaphore();
     bool SemaphoreWait(int sem_index);
+    // Try wait without blocking; returns false immediately if not available
+    bool SemaphoreTryWait(int sem_index);
     bool SemaphoreSignal(int sem_index);
     bool DestroySemaphore();
     

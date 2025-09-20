@@ -12,6 +12,8 @@
 #include <memory>
 #include <utility>
 #include <cstdint>
+#include <cstdio>
+#include <exception>
 
 namespace SAK {
 namespace timer {
@@ -81,6 +83,9 @@ public:
     void stop() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            if (!running_) {
+                return;  // Already stopped
+            }
             running_ = false;
             // Clear all timers
             timers_.clear();
@@ -88,17 +93,36 @@ public:
                 timer_queue_.pop();
             }
         }
-        cond_.notify_one();
+        // Notify and wait for thread to complete
+        cond_.notify_all();
         if (timer_thread_.joinable()) {
-            timer_thread_.join();
+            try {
+                timer_thread_.join();
+            } catch (...) {
+                // Ignore exceptions during thread join to prevent destructor throwing
+            }
         }
     }
 
     /**
-     * @brief Destructor
+     * @brief Destructor - must not throw exceptions
      */
-    ~Timer() {
-        stop();
+    ~Timer() noexcept {
+        try {
+            printf("Timer destructor called\n");
+            fflush(stdout);
+            stop();
+            printf("Timer destructor finished\n");
+            fflush(stdout);
+        } catch (...) {
+            // Destructors must not throw - this is critical for program stability
+            try {
+                printf("Timer destructor exception caught - terminating gracefully\n");
+                fflush(stdout);
+            } catch (...) {
+                // Ignore even printf failures at this point
+            }
+        }
     }
 
 private:
@@ -117,7 +141,14 @@ private:
 
     // Private constructor to ensure singleton pattern
     Timer() : running_(true), next_timer_id_(1) {
-        timer_thread_ = std::thread(&Timer::timer_loop, this);
+        // Start timer thread in a safer way
+        start_timer_thread();
+    }
+
+    void start_timer_thread() {
+        if (!timer_thread_.joinable()) {
+            timer_thread_ = std::thread(&Timer::timer_loop, this);
+        }
     }
 
     // Disable copying and assignment
@@ -144,35 +175,40 @@ private:
     // Timer thread main loop
     void timer_loop() {
         std::unique_lock<std::mutex> lock(mutex_);
-        
+
         while (running_) {
             if (timer_queue_.empty()) {
                 // No timers, wait for condition variable notification
-                cond_.wait(lock);
+                cond_.wait(lock, [this]() { return !running_ || !timer_queue_.empty(); });
+                if (!running_) break;  // Early exit if stopped
                 continue;
             }
-            
+
+            // Check if stopped before processing
+            if (!running_) break;
+
             // Get the earliest timer
             auto item = timer_queue_.top();
             timer_queue_.pop();
-            
+
             // Check if the timer has been cancelled
             if (timers_.find(item.id) == timers_.end() || timers_[item.id].cancelled) {
                 continue;
             }
-            
+
             // Calculate the waiting time
             auto now = Clock::now();
             if (item.next_time > now) {
                 // Not yet time, put it back in the queue and wait
                 timer_queue_.push(item);
-                cond_.wait_until(lock, item.next_time);
+                cond_.wait_until(lock, item.next_time, [this]() { return !running_; });
+                if (!running_) break;  // Early exit if stopped
                 continue;
             }
-            
+
             // Save the callback function to be called after unlocking
             auto callback = item.callback;
-            
+
             // If it's a periodic timer, reschedule
             if (item.interval_ms > 0) {
                 item.next_time = now + std::chrono::milliseconds(item.interval_ms);
@@ -182,10 +218,31 @@ private:
                 // One-time timer, remove from the map
                 timers_.erase(item.id);
             }
-            
+
             // Temporarily unlock to execute the callback, avoiding long-term lock holding
             lock.unlock();
-            callback();
+            try {
+                // Check if still running before executing callback
+                if (running_.load()) {
+                    callback();
+                }
+            } catch (const std::exception& e) {
+                // Log callback exceptions but continue running
+                try {
+                    printf("Timer callback exception: %s\n", e.what());
+                    fflush(stdout);
+                } catch (...) {
+                    // Ignore even logging failures
+                }
+            } catch (...) {
+                // Ignore unknown callback exceptions to prevent thread termination
+                try {
+                    printf("Timer callback unknown exception\n");
+                    fflush(stdout);
+                } catch (...) {
+                    // Ignore even logging failures
+                }
+            }
             lock.lock();
         }
     }

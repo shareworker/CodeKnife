@@ -3,7 +3,7 @@ set_languages("cxx17")  -- Use C++17 for better MinGW compatibility
 set_warnings("all")     -- Don't treat warnings as errors
 
 -- External dependencies
-add_requires("gtest")  -- GoogleTest for unit testing
+-- No external dependencies required
 
 -- Platform detection and flags
 if is_plat("windows") then
@@ -36,14 +36,14 @@ target("codeknife")
     add_files("src/*.cpp")  -- Include all source files
     add_headerfiles("include/*.hpp")  -- Include all header files
     add_includedirs("include", {public = true})
-    
+
     -- Platform-specific dependencies
     if is_plat("windows") then
         add_syslinks("ws2_32", "advapi32", "kernel32", "user32")
     else
         add_links("pthread", "rt", "stdc++fs")
     end
-    
+
     -- Export symbols for dynamic library
     if is_plat("windows") then
         add_cxxflags("-DCODEKNIFE_EXPORTS")
@@ -51,16 +51,37 @@ target("codeknife")
         add_cxxflags("-fPIC")
     end
 
+-- CodeKnife static library - for tests to avoid DLL dependency issues
+target("codeknife_static")
+    set_kind("static")
+    add_files("src/*.cpp")  -- Include all source files
+    add_headerfiles("include/*.hpp")  -- Include all header files
+    add_includedirs("include", {public = true})
+
+    -- Platform-specific dependencies
+    if is_plat("windows") then
+        add_syslinks("ws2_32", "advapi32", "kernel32", "user32")
+        -- Static linking flags for Windows (including pthread)
+        add_cxxflags("-static-libgcc", "-static-libstdc++", "-static")
+        add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
+    else
+        add_links("pthread", "rt", "stdc++fs")
+    end
+
 -- Utility tests
 target("test_util")
     set_kind("binary")
-    add_deps("codeknife")
+    add_deps("codeknife_static")  -- Use static library to avoid DLL issues
     add_files("test/test_main.cpp")
-    add_packages("gtest")
     add_tests("default")
     if is_plat("windows") then
         add_syslinks("ws2_32")
+        -- Add static linking flags to fix runtime library issues (including pthread)
+        add_cxxflags("-static-libgcc", "-static-libstdc++", "-static")
+        add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
     else
         add_links("pthread", "stdc++fs")
     end
     set_rundir("$(projectdir)")
+
+

@@ -27,7 +27,7 @@ xmake build
 
 This will generate:
 - `codeknife.dll` (Windows) or `libcodeknife.so` (Linux) - The main dynamic library
-- `test_util` - Unit test executable
+- `test_util` - Comprehensive test executable
 
 ## Usage
 Link against the CodeKnife dynamic library in your project:
@@ -39,19 +39,18 @@ Link against the CodeKnife dynamic library in your project:
 
 int main() {
     // Initialize logger
-    SAK::log::Logger::instance().init({
-        .enable_console = true,
-        .enable_file = true,
-        .log_dir = "./logs",
-        .level = SAK::log::Level::LOG_INFO
-    });
+    SAK::log::LogConfig config;
+    config.use_stdout = true;
+    config.log_dir = "./logs";
+    config.min_level = SAK::log::Level::LOG_INFO;
+    SAK::log::Logger::instance().configure(config);
     
     // Use memory pool
-    SAK::util::MemoryPool<1024> pool;
-    auto ptr = pool.allocate();
+    auto& pool = SAK::memory::MemoryPool::GetInstance();
+    auto ptr = pool.Allocate(1024);
     
     // Use thread pool
-    SAK::util::ThreadPool thread_pool(4);
+    SAK::thread::ThreadPool thread_pool(4);
     
     LOG_INFO("CodeKnife library initialized successfully");
     return 0;

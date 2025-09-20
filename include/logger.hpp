@@ -59,8 +59,21 @@ public:
 
     void configure(const LogConfig& config) {
         std::lock_guard<std::mutex> lock(mutex_);
+        bool was_async = config_.async_mode;
         config_ = config;
         init();
+        // Manage async thread based on mode transition
+        if (was_async && !config_.async_mode) {
+            // Stop async thread if switching to sync mode
+            if (async_thread_.joinable()) {
+                stop_async_thread();
+            }
+        } else if (!was_async && config_.async_mode) {
+            // Start async thread if switching to async mode
+            if (!async_thread_.joinable()) {
+                start_async_thread();
+            }
+        }
     }
 
     void log(Level level, const char* file, const char* func, int line, const char* fmt, ...) {
@@ -82,9 +95,28 @@ public:
         }
     }
 
-    ~Logger() {
-        if (config_.async_mode) {
-            stop_async_thread();
+    ~Logger() noexcept {
+        try {
+            // Always stop/join async thread if running to avoid hangs
+            std::cout << "Logger destructor called" << std::endl;
+            std::cout.flush();
+            if (async_thread_.joinable()) {
+                std::cout << "Stopping async thread in destructor" << std::endl;
+                std::cout.flush();
+                stop_async_thread();
+                std::cout << "Async thread stopped in destructor" << std::endl;
+                std::cout.flush();
+            }
+            std::cout << "Logger destructor finished" << std::endl;
+            std::cout.flush();
+        } catch (...) {
+            // Destructors must not throw - this is critical for program stability
+            try {
+                std::cout << "Logger destructor exception caught - terminating gracefully" << std::endl;
+                std::cout.flush();
+            } catch (...) {
+                // Ignore even cout failures at this point
+            }
         }
     }
 
@@ -203,14 +235,29 @@ private:
     }
 
     void start_async_thread() {
-        async_thread_ = std::thread([this] { async_logging_thread(); });
+        if (!async_thread_.joinable()) {
+            stop_flag_ = false;  // Reset stop flag for new thread
+            async_thread_ = std::thread([this] { async_logging_thread(); });
+        }
     }
 
     void stop_async_thread() {
-        stop_flag_ = true;
-        queue_cv_.notify_one();
-        if (async_thread_.joinable()) {
-            async_thread_.join();
+        if (!stop_flag_.exchange(true)) {  // Only proceed if not already stopped
+            queue_cv_.notify_one();
+            if (async_thread_.joinable()) {
+                try {
+                    async_thread_.join();
+                } catch (const std::exception& e) {
+                    // Log join failure but continue shutdown
+                    try {
+                        std::cerr << "Logger async thread join failed: " << e.what() << std::endl;
+                    } catch (...) {
+                        // Ignore even logging failures during shutdown
+                    }
+                } catch (...) {
+                    // Ignore unknown exceptions during thread join
+                }
+            }
         }
     }
 

@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <cassert>
 #include <atomic>
+#include <stdexcept>
 
 namespace SAK {
 namespace pool {
@@ -98,20 +99,30 @@ public:
      */
     T* acquire() {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         if (objects_.empty()) {
             if (!grow()) {
                 return nullptr; // Growth failed
             }
         }
-        
+
+        // Ensure we still have objects after potential growth
+        if (objects_.empty()) {
+            return nullptr;
+        }
+
         // Get object from the pool
         std::unique_ptr<T> obj = std::move(objects_.back());
         objects_.pop_back();
-        
+
+        // Validate object before releasing ownership
+        if (!obj) {
+            return nullptr;
+        }
+
         // Track for statistics
         ++active_count_;
-        
+
         // Release ownership without deleting
         return obj.release();
     }
@@ -123,15 +134,37 @@ public:
      */
     void release(T* obj) {
         if (!obj) return;
-        
-        // Reset the object state if needed
-        reset_func_(*obj);
-        
+
+        // Reset the object state if needed (catch exceptions to prevent pool corruption)
+        try {
+            reset_func_(*obj);
+        } catch (...) {
+            // If reset fails, we cannot safely return object to pool
+            // Delete it instead to prevent corruption
+            delete obj;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                --active_count_;
+            }
+            return;
+        }
+
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
+        // Basic double-free protection: check if object is already in pool
+        // This is O(n) but helps catch usage errors in debug scenarios
+        #ifdef DEBUG
+        for (const auto& pooled_obj : objects_) {
+            if (pooled_obj.get() == obj) {
+                // Double-free detected - this is a serious error
+                throw std::runtime_error("Attempted to release object that is already in pool");
+            }
+        }
+        #endif
+
         // Return to the pool
         objects_.push_back(std::unique_ptr<T>(obj));
-        
+
         // Update statistics
         --active_count_;
     }
@@ -157,11 +190,13 @@ public:
 
     /**
      * @brief Get the total number of objects managed by the pool
-     * 
+     *
      * @return size_t Total number of objects
      */
     size_t total_count() const {
-        return active_count() + available_count();
+        std::lock_guard<std::mutex> lock(mutex_);
+        // Calculate total within single critical section to avoid race condition
+        return active_count_.load() + objects_.size();
     }
 
     /**
@@ -250,13 +285,28 @@ private:
                 return false;
         }
         
-        // Add new objects
-        objects_.reserve(objects_.size() + new_objects);
-        for (size_t i = 0; i < new_objects; ++i) {
-            objects_.push_back(std::make_unique<T>());
+        // Add new objects with exception safety
+        try {
+            objects_.reserve(objects_.size() + new_objects);
+
+            // Create objects one by one with strong exception safety
+            std::vector<std::unique_ptr<T>> new_pool_objects;
+            new_pool_objects.reserve(new_objects);
+
+            for (size_t i = 0; i < new_objects; ++i) {
+                new_pool_objects.push_back(std::make_unique<T>());
+            }
+
+            // If all objects created successfully, move them to the main pool
+            for (auto& obj : new_pool_objects) {
+                objects_.push_back(std::move(obj));
+            }
+
+            return true;
+        } catch (...) {
+            // If any allocation fails, pool remains in valid state
+            return false;
         }
-        
-        return true;
     }
 
     // Pool storage

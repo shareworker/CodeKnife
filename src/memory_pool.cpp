@@ -162,24 +162,17 @@ MemoryPool& MemoryPool::GetInstance() {
 
 void* MemoryPool::Allocate(size_t size) {
     void* ptr = nullptr;
-    
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        ++total_allocations_;
-        ++current_allocations_;
-    }
-    
+
     // For small memory blocks, use fixed-size memory pools
     if (size > 0) {
         // Fix logic error: use binary search to find the appropriate memory pool
         // This is more efficient than linear search, especially when there are many memory pools
         size_t left = 0;
         size_t right = kNumPools - 1;
-        
+
         while (left <= right) {
             size_t mid = left + (right - left) / 2;
-            
+
             if (kSmallBlockSizes[mid] < size) {
                 left = mid + 1;
             } else if (mid > 0 && kSmallBlockSizes[mid - 1] >= size) {
@@ -187,6 +180,12 @@ void* MemoryPool::Allocate(size_t size) {
             } else {
                 // Found the appropriate memory pool
                 ptr = pools_[mid]->allocate();
+                if (ptr) {
+                    // Update statistics only after successful allocation
+                    std::lock_guard<std::mutex> lock(stats_mutex_);
+                    ++total_allocations_;
+                    ++current_allocations_;
+                }
                 return ptr;
             }
         }
@@ -195,38 +194,41 @@ void* MemoryPool::Allocate(size_t size) {
     // For large memory blocks, use the global allocator
     {
         std::lock_guard<std::mutex> lock(large_alloc_mutex_);
-        
+
         // Align size to at least 8-byte boundaries for improved memory access efficiency
         size_t aligned_size = ((size + 7) / 8) * 8;
-        
+
         ptr = ::operator new(aligned_size, std::nothrow);
         if (!ptr) {
-            // Handle memory allocation failure
-            std::lock_guard<std::mutex> stats_lock(stats_mutex_);
-            --current_allocations_;
-            --total_allocations_;
+            // Handle memory allocation failure - no need to adjust stats since we haven't incremented them yet
             return nullptr;
         }
         large_allocations_[ptr] = aligned_size;
+
+        // Update statistics only after successful allocation (within same lock to prevent race)
+        {
+            std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+            ++total_allocations_;
+            ++current_allocations_;
+        }
     }
-    
+
     return ptr;
 }
 
 void MemoryPool::Deallocate(void* ptr, size_t size) {
     if (!ptr) return;
 
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        --current_allocations_;
-    }
-    
     // For small memory blocks, return to the corresponding memory pool
     if (size > 0) {
         for (size_t i = 0; i < kNumPools; ++i) {
             if (size <= kSmallBlockSizes[i]) {
                 pools_[i]->deallocate(ptr);
+                // Update statistics only after successful deallocation
+                {
+                    std::lock_guard<std::mutex> lock(stats_mutex_);
+                    --current_allocations_;
+                }
                 return;
             }
         }
@@ -235,7 +237,7 @@ void MemoryPool::Deallocate(void* ptr, size_t size) {
     // For large memory blocks, release directly
     {
         std::lock_guard<std::mutex> lock(large_alloc_mutex_);
-        
+
         auto it = large_allocations_.find(ptr);
         if (it != large_allocations_.end()) {
             if (it->second != size) {
@@ -246,6 +248,12 @@ void MemoryPool::Deallocate(void* ptr, size_t size) {
             } else {
                 ::operator delete(ptr);
                 large_allocations_.erase(it);
+
+                // Update statistics only after successful deallocation (within same lock to prevent race)
+                {
+                    std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+                    --current_allocations_;
+                }
             }
         } else {
             // Attempt to deallocate unknown pointer
