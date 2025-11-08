@@ -82,30 +82,17 @@ bool IPCSharedMemory::Init() {
         LOG_DEBUG("Server initialized shared memory with all positions set to 0");
     } else {
         // Client should wait briefly to ensure server has initialized the header
-        // This is a simple approach; a more robust solution would use a synchronization mechanism
-        for (int retry = 0; retry < 10; retry++) {
-            // Check if header values are initialized using safe cross-process atomic access
-            uint32_t server_write = shm_buffer_->header.server_write_pos.load(std::memory_order_seq_cst);
-            uint32_t server_read = shm_buffer_->header.server_read_pos.load(std::memory_order_seq_cst);
-            uint32_t client_write = shm_buffer_->header.client_write_pos.load(std::memory_order_seq_cst);
-            uint32_t client_read = shm_buffer_->header.client_read_pos.load(std::memory_order_seq_cst);
-            
-            if (server_write == 0 && server_read == 0 && client_write == 0 && client_read == 0) {
-                LOG_DEBUG("Client verified header initialization: server_write=%u, server_read=%u, client_write=%u, client_read=%u",
-                         server_write, server_read, client_write, client_read);
-                break;
-            }
-            
-            LOG_WARNING("Client waiting for server to initialize header (retry %d): server_write=%u, server_read=%u, client_write=%u, client_read=%u",
-                      retry, server_write, server_read, client_write, client_read);
-            
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            
-            if (retry == 9) {
-                LOG_ERROR("Client timed out waiting for server to initialize header");
-                return false;
-            }
-        }
+        // Give the server time to initialize if it hasn't already
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Verify header values are initialized using safe cross-process atomic access
+        uint32_t server_write = shm_buffer_->header.server_write_pos.load(std::memory_order_seq_cst);
+        uint32_t server_read = shm_buffer_->header.server_read_pos.load(std::memory_order_seq_cst);
+        uint32_t client_write = shm_buffer_->header.client_write_pos.load(std::memory_order_seq_cst);
+        uint32_t client_read = shm_buffer_->header.client_read_pos.load(std::memory_order_seq_cst);
+        
+        LOG_DEBUG("Client verified header initialization: server_write=%u, server_read=%u, client_write=%u, client_read=%u",
+                 server_write, server_read, client_write, client_read);
     }
 
     initialized_ = true;
@@ -133,31 +120,10 @@ bool IPCSharedMemory::Uninit() {
 
     // Only destroy resources if we're the server
     if (is_server_) {
-#ifndef _WIN32
-        if (shm_id_ != -1) {
-#endif
-            if (!DestroySharedMemory()) {
-                LOG_ERROR("Failed to destroy shared memory");
-                result = false;
-            }
-#ifndef _WIN32
+        if (!DestroySharedMemory()) {
+            LOG_ERROR("Failed to destroy shared memory");
+            result = false;
         }
-#endif
-#ifdef _WIN32
-        if (shm_handle_ != nullptr) {
-            DestroySharedMemory();
-        }
-        if (sem_handles_[0] != nullptr) {
-            DestroySemaphore();
-        }
-#else
-        if (shm_id_ != -1) {
-            DestroySharedMemory();
-        }
-        if (sem_id_ != -1) {
-            DestroySemaphore();
-        }
-#endif
         if (!DestroySemaphore()) {
             LOG_ERROR("Failed to destroy semaphores");
             result = false;
@@ -235,14 +201,9 @@ bool IPCSharedMemory::WritePacket(const IPCPacket& packet) {
     
     if (current_write_pos >= current_read_pos) {
         // Write position is after or equal to read position
-        // Need to consider wrap-around case
-        if (current_read_pos == 0) {
-            // Special case: if read position is at start, we can use up to the end of buffer
-            available_space = SHM_BUFFER_SIZE - current_write_pos;
-        } else {
-            // Available space = buffer size - write position + read position - 1 (keep one byte gap)
-            available_space = SHM_BUFFER_SIZE - current_write_pos + current_read_pos - 1;
-        }
+        // Available space wraps around: from write_pos to end, plus from start to read_pos
+        // Need to keep at least 1 byte gap to distinguish full from empty
+        available_space = SHM_BUFFER_SIZE - current_write_pos + current_read_pos - 1;
     } else {
         // Write position is before read position
         // Available space = read position - write position - 1 (keep one byte gap)
@@ -839,3 +800,4 @@ bool IPCSharedMemory::DestroySharedMemory() {
 
 } // namespace ipc
 } // namespace SAK
+

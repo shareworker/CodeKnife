@@ -82,3 +82,4 @@ uint32_t Crc32c::Compute(const std::vector<uint8_t>& data) {
 }
 
 }  // namespace SAK
+

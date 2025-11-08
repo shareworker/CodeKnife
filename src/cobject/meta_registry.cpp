@@ -1,5 +1,6 @@
-#include "../include/meta_registry.hpp"
-#include "../include/meta_object.hpp"
+
+#include "../include/cobject/meta_registry.hpp"
+#include "../include/cobject/meta_object.hpp"
 
 namespace SAK {
 
@@ -41,3 +42,4 @@ bool MetaRegistry::isClassRegistered(const std::string& className) const {
 }
 
 } // namespace SAK
+

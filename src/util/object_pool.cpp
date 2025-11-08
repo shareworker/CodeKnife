@@ -1,4 +1,4 @@
-#include "../include/object_pool.hpp"
+#include "../include/util/object_pool.hpp"
 
 // This file is intentionally minimal since the ObjectPool is primarily implemented
 // as a header-only template class. However, we provide this source file to allow
@@ -11,3 +11,4 @@ namespace pool {
 
 } // namespace pool
 } // namespace SAK
+

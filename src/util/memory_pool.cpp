@@ -1,4 +1,4 @@
-#include "../include/memory_pool.hpp"
+#include "../include/util/memory_pool.hpp"
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
@@ -164,14 +164,14 @@ void* MemoryPool::Allocate(size_t size) {
     void* ptr = nullptr;
 
     // For small memory blocks, use fixed-size memory pools
-    if (size > 0) {
-        // Fix logic error: use binary search to find the appropriate memory pool
+    if (size > 0 && size <= kSmallBlockSizes[kNumPools - 1]) {
+        // Use binary search to find the appropriate memory pool
         // This is more efficient than linear search, especially when there are many memory pools
-        size_t left = 0;
-        size_t right = kNumPools - 1;
+        int left = 0;
+        int right = static_cast<int>(kNumPools) - 1;
 
         while (left <= right) {
-            size_t mid = left + (right - left) / 2;
+            int mid = left + (right - left) / 2;
 
             if (kSmallBlockSizes[mid] < size) {
                 left = mid + 1;
@@ -244,16 +244,18 @@ void MemoryPool::Deallocate(void* ptr, size_t size) {
                 // Attempt to deallocate with mismatched size
                 // This may be due to the user passing an incorrect size parameter
                 // Should log instead of outputting to standard error
-                std::cerr << "Warning: Attempted to deallocate with mismatched size" << std::endl;
-            } else {
-                ::operator delete(ptr);
-                large_allocations_.erase(it);
+                std::cerr << "Warning: Attempted to deallocate with mismatched size (expected: " 
+                          << it->second << ", got: " << size << "), deallocating anyway" << std::endl;
+            }
+            
+            // Always deallocate to prevent memory leak
+            ::operator delete(ptr);
+            large_allocations_.erase(it);
 
-                // Update statistics only after successful deallocation (within same lock to prevent race)
-                {
-                    std::lock_guard<std::mutex> stats_lock(stats_mutex_);
-                    --current_allocations_;
-                }
+            // Update statistics only after successful deallocation (within same lock to prevent race)
+            {
+                std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+                --current_allocations_;
             }
         } else {
             // Attempt to deallocate unknown pointer

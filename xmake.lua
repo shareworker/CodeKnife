@@ -1,14 +1,13 @@
 -- Set common options for MinGW/MSVC compatibility
 set_languages("cxx17")  -- Use C++17 for better MinGW compatibility
-set_warnings("all")     -- Don't treat warnings as errors
+set_warnings("none")    -- Avoid MSVC D9025 override by not mixing /Wn levels
 
 -- External dependencies
 -- No external dependencies required
 
 -- Platform detection and flags
 if is_plat("windows") then
-    -- MinGW/Windows specific flags
-    add_cxxflags("-Wall", "-Wextra")
+    -- Windows (MSVC/MinGW). Keep warnings controlled globally via set_warnings("none")
     add_defines("WIN32_LEAN_AND_MEAN", "_WIN32_WINNT=0x0601")
     add_syslinks("ws2_32", "kernel32", "user32")
     -- MinGW doesn't need filesystem linking explicitly
@@ -28,12 +27,23 @@ end
 add_cxxflags("-O2", "-DNDEBUG", {mode = "release"})
 
 -- Include directories
-add_includedirs("include")
+add_includedirs("include", "include/cobject", "include/util")
 
 -- CodeKnife dynamic library - unified library containing all components
 target("codeknife")
     set_kind("shared")
-    add_files("src/*.cpp")  -- Include all source files
+    -- Platform-specific source files
+    add_files("src/util/**.cpp")
+    add_files("src/cobject/capplication.cpp")
+    add_files("src/cobject/cobject.cpp")
+    add_files("src/cobject/connection_manager.cpp")
+    add_files("src/cobject/meta_object.cpp")
+    add_files("src/cobject/meta_registry.cpp")
+    if is_plat("windows") then
+        add_files("src/cobject/event_dispatcher_win.cpp")
+    else
+        add_files("src/cobject/event_dispatcher_linux.cpp")
+    end
     add_headerfiles("include/*.hpp")  -- Include all header files
     add_includedirs("include", {public = true})
 
@@ -54,7 +64,18 @@ target("codeknife")
 -- CodeKnife static library - for tests to avoid DLL dependency issues
 target("codeknife_static")
     set_kind("static")
-    add_files("src/*.cpp")  -- Include all source files
+    -- Platform-specific source files
+    add_files("src/util/**.cpp")
+    add_files("src/cobject/capplication.cpp")
+    add_files("src/cobject/cobject.cpp")
+    add_files("src/cobject/connection_manager.cpp")
+    add_files("src/cobject/meta_object.cpp")
+    add_files("src/cobject/meta_registry.cpp")
+    if is_plat("windows") then
+        add_files("src/cobject/event_dispatcher_win.cpp")
+    else
+        add_files("src/cobject/event_dispatcher_linux.cpp")
+    end
     add_headerfiles("include/*.hpp")  -- Include all header files
     add_includedirs("include", {public = true})
 

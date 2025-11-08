@@ -1,6 +1,7 @@
-#include "../include/connection_manager.hpp"
-#include "../include/cobject.hpp"
-#include "../include/meta_object.hpp"
+
+#include "../include/cobject/connection_manager.hpp"
+#include "../include/cobject/cobject.hpp"
+#include "../include/cobject/meta_object.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -65,23 +66,27 @@ bool ConnectionManager::disconnect(const CObject* sender, const char* signal,
     }
     
     auto& connList = it->second;
-    auto connIt = std::find_if(connList.begin(), connList.end(),
-        [signal, receiver, slot](const Connection& conn) {
-            bool signalMatch = !signal || conn.signal == signal;
-            bool receiverMatch = !receiver || conn.receiver == receiver;
-            bool slotMatch = !slot || conn.slot == slot;
-            return signalMatch && receiverMatch && slotMatch;
-        });
     
-    if (connIt != connList.end()) {
-        connList.erase(connIt);
-        if (connList.empty()) {
-            connections_.erase(it);
-        }
-        return true;
+    // Remove all matching connections (not just the first one)
+    auto originalSize = connList.size();
+    connList.erase(
+        std::remove_if(connList.begin(), connList.end(),
+            [signal, receiver, slot](const Connection& conn) {
+                bool signalMatch = !signal || conn.signal == signal;
+                bool receiverMatch = !receiver || conn.receiver == receiver;
+                bool slotMatch = !slot || conn.slot == slot;
+                return signalMatch && receiverMatch && slotMatch;
+            }),
+        connList.end()
+    );
+    
+    bool removed = (connList.size() < originalSize);
+    
+    if (connList.empty()) {
+        connections_.erase(it);
     }
     
-    return false;
+    return removed;
 }
 
 void ConnectionManager::disconnectAll(const CObject* obj) {
@@ -152,18 +157,10 @@ std::vector<Connection> ConnectionManager::findConnections(const CObject* sender
 }
 
 void ConnectionManager::invokeSlot(const Connection& conn, const std::vector<std::any>& args) {
-    try {
-        const MetaMethod* slot = conn.receiver->metaObject()->findMethod(conn.slot);
-        if (slot) {
-            // Cast away const for method invocation - this is safe as we're calling a slot
-            slot->invoke(const_cast<CObject*>(conn.receiver), args);
-        }
-    } catch (const std::exception& e) {
-        // Log error but don't crash the application
-        std::cerr << "Error invoking slot " << conn.slot << ": " << e.what() << std::endl;
-    } catch (...) {
-        std::cerr << "Unknown error invoking slot " << conn.slot << std::endl;
-    }
+    // Delegate to CObject::metacall() - following Qt's design pattern
+    // where QMetaObject::activate() handles the actual slot invocation logic
+    const_cast<CObject*>(conn.receiver)->metacall(conn.slot.c_str(), args, conn.type, conn.sender);
 }
 
 } // namespace SAK
+

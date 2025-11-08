@@ -236,3 +236,4 @@ bool FileObject::Valid() const noexcept { return impl_ != nullptr; }
 uint64_t FileObject::Size() const noexcept { return Valid() ? impl_->size : 0; }
 
 } // namespace SAK
+

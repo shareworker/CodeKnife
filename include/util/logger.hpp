@@ -98,25 +98,12 @@ public:
     ~Logger() noexcept {
         try {
             // Always stop/join async thread if running to avoid hangs
-            std::cout << "Logger destructor called" << std::endl;
-            std::cout.flush();
             if (async_thread_.joinable()) {
-                std::cout << "Stopping async thread in destructor" << std::endl;
-                std::cout.flush();
                 stop_async_thread();
-                std::cout << "Async thread stopped in destructor" << std::endl;
-                std::cout.flush();
             }
-            std::cout << "Logger destructor finished" << std::endl;
-            std::cout.flush();
         } catch (...) {
             // Destructors must not throw - this is critical for program stability
-            try {
-                std::cout << "Logger destructor exception caught - terminating gracefully" << std::endl;
-                std::cout.flush();
-            } catch (...) {
-                // Ignore even cout failures at this point
-            }
+            // Silently handle any exceptions during shutdown
         }
     }
 

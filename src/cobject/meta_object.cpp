@@ -1,5 +1,6 @@
-#include "../include/meta_object.hpp"
-#include "../include/cobject.hpp"
+
+#include "../include/cobject/meta_object.hpp"
+#include "../include/cobject/cobject.hpp"
 #include <algorithm>
 #include <string>
 
@@ -77,3 +78,4 @@ bool MetaObject::inherits(const MetaObject* metaObject) const {
 }
 
 } // namespace SAK
+

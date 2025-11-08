@@ -1,6 +1,5 @@
 #pragma once
 
-#include "cobject.hpp"
 #include <unordered_map>
 #include <string>
 #include <mutex>

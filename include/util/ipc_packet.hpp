@@ -162,6 +162,35 @@ public:
         }
         return *this;
     }
+    
+    // Move constructor
+    IPCPacket(IPCPacket&& other) noexcept
+        : header_(other.header_)
+        , payload_(other.payload_)
+        , checksum_(other.checksum_)
+        , total_size_(other.total_size_)
+    {
+        other.payload_ = nullptr;
+        other.total_size_ = 0;
+        other.header_.payload_len = 0;
+    }
+    
+    // Move assignment operator
+    IPCPacket& operator=(IPCPacket&& other) noexcept {
+        if (this != &other) {
+            delete[] payload_;
+            
+            header_ = other.header_;
+            payload_ = other.payload_;
+            checksum_ = other.checksum_;
+            total_size_ = other.total_size_;
+            
+            other.payload_ = nullptr;
+            other.total_size_ = 0;
+            other.header_.payload_len = 0;
+        }
+        return *this;
+    }
 
     // Destructor
     ~IPCPacket() {
