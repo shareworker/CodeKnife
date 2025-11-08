@@ -1,9 +1,9 @@
 
-#include "../include/cobject/cobject.hpp"
-#include "../include/cobject/connection_manager.hpp"
-#include "../include/cobject/event.hpp"
-#include "../include/cobject/capplication.hpp"
-#include "../include/cobject/event_dispatcher.hpp"
+#include "cobject.hpp"
+#include "connection_manager.hpp"
+#include "event.hpp"
+#include "capplication.hpp"
+#include "event_dispatcher.hpp"
 #include <algorithm>
 #include <iostream>
 #include <future>

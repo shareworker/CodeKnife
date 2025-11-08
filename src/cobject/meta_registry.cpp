@@ -1,6 +1,6 @@
 
-#include "../include/cobject/meta_registry.hpp"
-#include "../include/cobject/meta_object.hpp"
+#include "meta_registry.hpp"
+#include "meta_object.hpp"
 
 namespace SAK {
 

@@ -1,4 +1,4 @@
-#include "../include/util/byte_buffer.hpp"
+#include "byte_buffer.hpp"
 
 #include <cstring>
 #include <utility>

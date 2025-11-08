@@ -1,7 +1,7 @@
 
-#include "../include/cobject/connection_manager.hpp"
-#include "../include/cobject/cobject.hpp"
-#include "../include/cobject/meta_object.hpp"
+#include "connection_manager.hpp"
+#include "cobject.hpp"
+#include "meta_object.hpp"
 #include <algorithm>
 #include <iostream>
 

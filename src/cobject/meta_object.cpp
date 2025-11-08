@@ -1,6 +1,6 @@
 
-#include "../include/cobject/meta_object.hpp"
-#include "../include/cobject/cobject.hpp"
+#include "meta_object.hpp"
+#include "cobject.hpp"
 #include <algorithm>
 #include <string>
 

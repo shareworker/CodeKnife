@@ -32,20 +32,17 @@ add_includedirs("include", "include/cobject", "include/util")
 -- CodeKnife dynamic library - unified library containing all components
 target("codeknife")
     set_kind("shared")
-    -- Platform-specific source files
-    add_files("src/util/**.cpp")
-    add_files("src/cobject/capplication.cpp")
-    add_files("src/cobject/cobject.cpp")
-    add_files("src/cobject/connection_manager.cpp")
-    add_files("src/cobject/meta_object.cpp")
-    add_files("src/cobject/meta_registry.cpp")
+    -- Source files
+    add_files("src/util/*.cpp")
+    add_files("src/cobject/*.cpp")
+    -- Exclude non-target platform dispatcher
     if is_plat("windows") then
-        add_files("src/cobject/event_dispatcher_win.cpp")
+        remove_files("src/cobject/event_dispatcher_linux.cpp")
     else
-        add_files("src/cobject/event_dispatcher_linux.cpp")
+        remove_files("src/cobject/event_dispatcher_win.cpp")
     end
-    add_headerfiles("include/*.hpp")  -- Include all header files
-    add_includedirs("include", {public = true})
+    add_headerfiles("include/**.hpp")  -- Include all header files recursively
+    add_includedirs("include", "include/cobject", "include/util", {public = true})
 
     -- Platform-specific dependencies
     if is_plat("windows") then
@@ -64,20 +61,17 @@ target("codeknife")
 -- CodeKnife static library - for tests to avoid DLL dependency issues
 target("codeknife_static")
     set_kind("static")
-    -- Platform-specific source files
-    add_files("src/util/**.cpp")
-    add_files("src/cobject/capplication.cpp")
-    add_files("src/cobject/cobject.cpp")
-    add_files("src/cobject/connection_manager.cpp")
-    add_files("src/cobject/meta_object.cpp")
-    add_files("src/cobject/meta_registry.cpp")
+    -- Source files
+    add_files("src/util/*.cpp")
+    add_files("src/cobject/*.cpp")
+    -- Exclude non-target platform dispatcher
     if is_plat("windows") then
-        add_files("src/cobject/event_dispatcher_win.cpp")
+        del_files("src/cobject/event_dispatcher_linux.cpp")
     else
-        add_files("src/cobject/event_dispatcher_linux.cpp")
+        del_files("src/cobject/event_dispatcher_win.cpp")
     end
-    add_headerfiles("include/*.hpp")  -- Include all header files
-    add_includedirs("include", {public = true})
+    add_headerfiles("include/**.hpp")  -- Include all header files recursively
+    add_includedirs("include", "include/cobject", "include/util", {public = true})
 
     -- Platform-specific dependencies
     if is_plat("windows") then

@@ -10,6 +10,12 @@ CodeKnife is a comprehensive C++ utility library that provides essential compone
 - **File Operations**: Enhanced file handling with CRC32C checksums
 - **Utility Classes**: Byte buffers, timers, and common data structures
 
+## Core Architecture
+- **CObject meta system**: `CObject` base with reflection-like `MetaObject` for properties, methods, and signals.
+- **Signal/Slot**: Type-erased invocation with `ConnectionManager`, supports direct/queued/blocking connections.
+- **Event Loop**: `CApplication` provides event posting and integrates platform `EventDispatcher` (Win/Linux).
+- **Utilities**: Logger, memory/object pools, thread pool, byte buffer, timers.
+
 ## Build Requirements
 - C++17 compatible compiler
 - xmake build system
@@ -21,16 +27,25 @@ Clone the repository and build using xmake:
 ```bash
 git clone <repository-url>
 cd CodeKnife
-xmake config
-xmake build
+# Configure & build (Debug)
+xmake f -m debug
+xmake
 ```
 
 This will generate:
-- `codeknife.dll` (Windows) or `libcodeknife.so` (Linux) - The main dynamic library
-- `test_util` - Comprehensive test executable
+- `codeknife` (shared library)
+- `codeknife_static` (static library)
+- `test_util` (test executable)
+
+To build Release:
+
+```bash
+xmake f -m release
+xmake
+```
 
 ## Usage
-Link against the CodeKnife dynamic library in your project:
+Headers are available via short-form includes (public include dirs are exported):
 
 ```cpp
 #include "logger.hpp"
@@ -57,6 +72,45 @@ int main() {
 }
 ```
 
+### Signal-Slot Quickstart
+```cpp
+#include "cobject.hpp"
+#include "connection_manager.hpp"
+
+class Sender : public SAK::CObject {
+    DECLARE_OBJECT(Sender)
+public:
+    PROPERTY(Sender, int, count)
+    SIGNAL(Sender, countChanged, "void(int)")
+    void inc() { setcount(count() + 1); EMIT_SIGNAL(countChanged, count()); }
+};
+
+class Receiver : public SAK::CObject {
+    DECLARE_OBJECT(Receiver)
+public:
+    SLOT(Receiver, void, onCountChanged, "void(int)", int v)
+};
+
+void Receiver::onCountChanged(int v) { /* handle */ }
+
+// Connect and emit
+Sender s; Receiver r;
+SAK::CObject::connect(&s, "countChanged", &r, "onCountChanged", SAK::ConnectionType::kDirectConnection);
+s.inc();
+```
+
+### Event Loop & Timers
+```cpp
+#include "capplication.hpp"
+
+int main() {
+  SAK::CApplication app; // starts event dispatcher internally per platform
+  // post events or run cross-thread queued connections
+  app.exec();
+  return 0;
+}
+```
+
 ### Available Components
 
 - **Logger**: `#include "logger.hpp"` - Thread-safe logging with macros `LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERROR`
@@ -72,6 +126,16 @@ Run the unit tests:
 ```bash
 xmake run test_util
 ```
+
+## Build Targets
+- `codeknife`: shared library with platform-specific event dispatcher selected automatically.
+- `codeknife_static`: static library (tests link this to avoid DLL issues).
+- `test_util`: end-to-end test binary covering core modules.
+
+## Platform Notes
+- Windows: uses `event_dispatcher_win.cpp` (Win32 APIs), links `ws2_32`, `advapi32`, `kernel32`, `user32`.
+- Linux: uses `event_dispatcher_linux.cpp` (POSIX), links `pthread`, `rt`, `stdc++fs`.
+- Build system auto-excludes the non-target dispatcher.
 
 ## Cross-Platform Support
 The library is designed for cross-platform compatibility:
