@@ -1,0 +1,5 @@
+# Suppress static container capacity leaks in MetaRegistrar
+# These static containers are managed by RAII CleanupGuard and cleaned up during
+# static destruction. ASan's leak check runs before static destructors, so it
+# reports these as leaks even though they are properly cleaned up.
+leak:MetaRegistrar

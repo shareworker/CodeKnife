@@ -62,7 +62,7 @@ static gboolean socketNotifierSourceCheck(GSource* source)
     bool pending = false;
     for (size_t i = 0; i < s->pollfds.size(); ++i) {
         auto* pfd = s->pollfds[i];
-        if (pfd->pollfd.revents & G_IO_INVAL) {
+        if (pfd->pollfd.revents & G_IO_NVAL) {
             pfd->socketNotifier->enable = false;
         } else if (pfd->socketNotifier->enable) {
             pending = pending || ((pfd->pollfd.revents & pfd->pollfd.events) != 0);

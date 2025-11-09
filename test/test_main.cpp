@@ -6,6 +6,7 @@
 #include "cobject.hpp"
 #include "meta_object.hpp"
 #include "meta_registry.hpp"
+#include "meta_registrar.hpp"
 #include "connection_manager.hpp"
 #include "connection_types.hpp"
 #include "capplication.hpp"
@@ -747,5 +748,6 @@ int main() {
         return 1;
     }
 
+    // MetaRegistrar static containers are automatically cleaned up via RAII CleanupGuard
     return 0;
 }

@@ -3,7 +3,10 @@ set_languages("cxx17")  -- Use C++17 for better MinGW compatibility
 set_warnings("none")    -- Avoid MSVC D9025 override by not mixing /Wn levels
 
 -- External dependencies
--- No external dependencies required
+-- Declare glib on platforms that need it (Linux)
+if is_plat("linux") then
+    add_requires("glib")
+end
 
 -- Platform detection and flags
 if is_plat("windows") then
@@ -49,6 +52,7 @@ target("codeknife")
         add_syslinks("ws2_32", "advapi32", "kernel32", "user32")
     else
         add_links("pthread", "rt", "stdc++fs")
+        add_packages("glib")
     end
 
     -- Export symbols for dynamic library
@@ -66,9 +70,9 @@ target("codeknife_static")
     add_files("src/cobject/*.cpp")
     -- Exclude non-target platform dispatcher
     if is_plat("windows") then
-        del_files("src/cobject/event_dispatcher_linux.cpp")
+        remove_files("src/cobject/event_dispatcher_linux.cpp")
     else
-        del_files("src/cobject/event_dispatcher_win.cpp")
+        remove_files("src/cobject/event_dispatcher_win.cpp")
     end
     add_headerfiles("include/**.hpp")  -- Include all header files recursively
     add_includedirs("include", "include/cobject", "include/util", {public = true})
@@ -81,6 +85,7 @@ target("codeknife_static")
         add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
     else
         add_links("pthread", "rt", "stdc++fs")
+        add_packages("glib")
     end
 
 -- Utility tests
@@ -96,7 +101,10 @@ target("test_util")
         add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
     else
         add_links("pthread", "stdc++fs")
+        add_packages("glib")
+        -- Set LSan suppressions for known static container leaks in debug mode
+        if is_mode("debug") then
+            add_runenvs("LSAN_OPTIONS", "suppressions=$(projectdir)/.lsan_suppressions")
+        end
     end
     set_rundir("$(projectdir)")
-
-

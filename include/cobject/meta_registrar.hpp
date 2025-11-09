@@ -33,9 +33,22 @@ public:
         const char* signature;
     };
     
+    // RAII cleanup guard to automatically release static containers on destruction
+    struct CleanupGuard {
+        ~CleanupGuard() {
+            properties_.clear();
+            properties_.shrink_to_fit();
+            methods_.clear();
+            methods_.shrink_to_fit();
+            signals_.clear();
+            signals_.shrink_to_fit();
+        }
+    };
+    
     inline static std::vector<PropertyInfo> properties_;
     inline static std::vector<MethodInfo> methods_;
     inline static std::vector<SignalInfo> signals_;
+    inline static CleanupGuard cleanup_guard_;
     
     static void registerProperty(const char* name, const char* typeName,
                                  std::function<std::any(const CObject*)> getter,
