@@ -2,6 +2,11 @@
 set_languages("cxx17")  -- Use C++17 for better MinGW compatibility
 set_warnings("none")    -- Avoid MSVC D9025 override by not mixing /Wn levels
 
+-- Force MinGW toolchain on Windows
+if is_plat("windows") then
+    set_toolchains("mingw")
+end
+
 -- External dependencies
 -- No external dependencies required
 

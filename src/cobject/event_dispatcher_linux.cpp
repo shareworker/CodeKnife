@@ -241,7 +241,7 @@ EventDispatcherLinux::~EventDispatcherLinux()
 
 bool EventDispatcherLinux::processEvents()
 {
-    g_main_context_iteration(mainContext_, false);
+    g_main_context_iteration(mainContext_, true);
     if (timerSource_) {
         auto* s = timerSource_;
         for (auto& t : s->timerList) {
