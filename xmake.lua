@@ -2,6 +2,9 @@
 set_languages("cxx17")  -- Use C++17 for better MinGW compatibility
 set_warnings("none")    -- Avoid MSVC D9025 override by not mixing /Wn levels
 
+-- Add required packages
+add_requires("gtest")
+
 -- Force MinGW toolchain on Windows
 if is_plat("windows") then
     set_toolchains("mingw")
@@ -104,4 +107,19 @@ target("test_util")
     end
     set_rundir("$(projectdir)")
 
+-- Memory Pool V2 tests
+target("test_memory_pool_v2")
+    set_kind("binary")
+    add_deps("codeknife_static")
+    add_files("test/test_memory_pool_v2.cpp")
+    add_packages("gtest")
+    add_tests("default")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+        add_cxxflags("-static-libgcc", "-static-libstdc++", "-static")
+        add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
+    else
+        add_links("pthread", "stdc++fs")
+    end
+    set_rundir("$(projectdir)")
 
