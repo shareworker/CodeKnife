@@ -172,4 +172,17 @@ public:
     }
 };
 
+template<typename Condition>
+bool timed_spin_wait_until(Condition condition) {
+    // 32 pauses + 32 yields are meausered as balanced spin time before sleep.
+    bool finish = condition();
+    for (int i = 1; !finish && i < 32; finish = condition(), i *= 2) {
+        machine_pause(i);
+    }
+    for (int i = 32; !finish && i < 64; finish = condition(), ++i) {
+        yield();
+    }
+    return finish;
+}
+
 }

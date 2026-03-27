@@ -46,6 +46,84 @@ private:
     Mutex* mutex_{};
 };
 
+template<typename Mutex>
+class rw_scoped_lock {
+public:
+    constexpr rw_scoped_lock() noexcept : mutex_(nullptr), is_writer_(false) {}
+    ~rw_scoped_lock() {
+        if (mutex_) {
+            Release();
+        }
+    }
+
+    rw_scoped_lock(Mutex& m, bool write = true) : mutex_(nullptr), is_writer_(false) {
+        Acquire(m, write);
+    }
+
+    rw_scoped_lock(const rw_scoped_lock&) = delete;
+    rw_scoped_lock& operator=(const rw_scoped_lock&) = delete;
+
+    void Acquire(Mutex& m, bool write = true) {
+        assert(mutex_ == nullptr);
+        mutex_ = &m;
+        is_writer_ = write;
+        if (write) {
+            mutex_->lock();
+        } else {
+            mutex_->lock_shared();
+        }
+    }
+
+    bool TryAcquire(Mutex& m, bool write = true) {
+        assert(mutex_ == nullptr);
+        bool succeed = write ? m.try_lock() : m.try_lock_shared();
+        if (succeed) {
+            mutex_ = &m;
+            is_writer_ = write;
+        }
+        return succeed;
+    }
+
+    void Release() {
+        assert(mutex_);
+        Mutex* m = mutex_;
+        mutex_ = nullptr;
+
+        if (is_writer_) {
+            m->unlock();
+        } else {
+            m->unlock_shared();
+        }
+    }
+
+    bool UpgradeToWriter() {
+        assert(mutex_);
+        if (is_writer_) {
+            return true;
+        }
+        is_writer_ = true;
+        return mutex_->upgrade();
+    }
+
+    bool DowngradeToReader() {
+        assert(mutex_);
+        if (is_writer_) {
+            mutex_->downgrade();
+            is_writer_ = false;
+        }
+        return true;
+    }
+
+    bool IsWriter() const {
+        assert(mutex_);
+        return is_writer_;
+    }
+
+private:
+    Mutex* mutex_{};
+    bool is_writer_{};
+};
+
 class spin_mutex {
 public:
     static constexpr bool is_fair_mutex = false;

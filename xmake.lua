@@ -107,6 +107,38 @@ target("test_util")
     end
     set_rundir("$(projectdir)")
 
+-- Work-stealing deque tests
+target("test_work_stealing_deque")
+    set_kind("binary")
+    add_deps("codeknife_static")
+    add_files("test/test_work_stealing_deque.cpp")
+    add_packages("gtest")
+    add_tests("default")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+        add_cxxflags("-static-libgcc", "-static-libstdc++", "-static")
+        add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
+    else
+        add_links("pthread", "stdc++fs")
+    end
+    set_rundir("$(projectdir)")
+
+-- SkipList tests
+target("test_skiplist")
+    set_kind("binary")
+    add_deps("codeknife_static")
+    add_files("test/test_skiplist.cpp")
+    add_packages("gtest")
+    add_tests("default")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+        add_cxxflags("-static-libgcc", "-static-libstdc++", "-static")
+        add_ldflags("-static-libgcc", "-static-libstdc++", "-static")
+    else
+        add_links("pthread", "stdc++fs")
+    end
+    set_rundir("$(projectdir)")
+
 -- Memory Pool V2 tests
 target("test_memory_pool_v2")
     set_kind("binary")
@@ -122,4 +154,3 @@ target("test_memory_pool_v2")
         add_links("pthread", "stdc++fs")
     end
     set_rundir("$(projectdir)")
-

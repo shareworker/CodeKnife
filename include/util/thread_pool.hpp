@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include <queue>
+#include <deque>
 #include <memory>
 #include <thread>
 #include <mutex>
@@ -9,6 +9,7 @@
 #include <functional>
 #include <stdexcept>
 #include <atomic>
+#include "work_stealing_deque.hpp"
 
 namespace SAK {
 namespace thread {
@@ -27,17 +28,7 @@ public:
         );
         
         std::future<return_type> res = task->get_future();
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-
-            // don't allow enqueueing after stopping the pool
-            if(stop.load()) {
-                throw std::runtime_error("enqueue on stopped ThreadPool");
-            }
-
-            tasks.emplace([task](){ (*task)(); });
-        }
-        condition.notify_one();
+        submit_task([task](){ (*task)(); });
         return res;
     }
     
@@ -50,12 +41,28 @@ public:
     ~ThreadPool();
 
 private:
+    struct WorkerState {
+        WorkerState() = default;
+
+        work_stealing_deque<std::function<void()>> local_tasks;
+        std::deque<std::function<void()>> inbox;
+        std::mutex inbox_mutex;
+    };
+
+    void submit_task(std::function<void()> task);
+    bool try_acquire_task(size_t worker_index, std::function<void()>& task);
+    bool try_drain_inbox_to_local(size_t worker_index);
+    bool try_steal_task(size_t worker_index, std::function<void()>& task);
+
     std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
+    std::vector<std::unique_ptr<WorkerState>> worker_states;
     
-    mutable std::mutex queue_mutex;
+    mutable std::mutex control_mutex;
+    mutable std::mutex wait_mutex;
     std::condition_variable condition;
     std::atomic<bool> stop;
+    std::atomic<size_t> pending_tasks{0};
+    std::atomic<size_t> submission_index{0};
 };
 
 } // namespace thread
